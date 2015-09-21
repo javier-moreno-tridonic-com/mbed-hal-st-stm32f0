@@ -193,8 +193,8 @@ int i2c_read(i2c_t *obj, int address, char *data, int length, int stop)
             return -1;
         }
     }
-    __HAL_I2C_CLEAR_ADDRFLAG(&I2cHandle);
-
+    //__HAL_I2C_CLEAR_ADDRFLAG(&I2cHandle);
+    __HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_ADDR);
 
     // Read all bytes except last one
     for (count = 0; count < (length - 1); count++) {
@@ -246,7 +246,8 @@ int i2c_write(i2c_t *obj, int address, const char *data, int length, int stop)
             return -1;
         }
     }
-    __HAL_I2C_CLEAR_ADDRFLAG(&I2cHandle);
+    //__HAL_I2C_CLEAR_ADDRFLAG(&I2cHandle);
+    __HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_ADDR);
 
     for (count = 0; count < length; count++) {
         if (i2c_byte_write(obj, data[count]) != 1) {

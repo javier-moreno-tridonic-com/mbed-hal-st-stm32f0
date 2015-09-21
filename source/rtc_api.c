@@ -63,7 +63,8 @@ void rtc_init(void)
     RCC_OscInitStruct.LSEState       = RCC_LSE_ON; /* External 32.768 kHz clock on OSC_IN/OSC_OUT */
     if (HAL_RCC_OscConfig(&RCC_OscInitStruct) == HAL_OK) {
         // Connect LSE to RTC
-        __HAL_RCC_RTC_CLKPRESCALER(RCC_RTCCLKSOURCE_LSE);
+#warning "jagomo: __HAL_RCC_RTC_CLKPRESCALER(RCC_RTCCLKSOURCE_LSE);"
+        //__HAL_RCC_RTC_CLKPRESCALER(RCC_RTCCLKSOURCE_LSE);
         __HAL_RCC_RTC_CONFIG(RCC_RTCCLKSOURCE_LSE);
         rtc_freq = LSE_VALUE;
     } else {
@@ -76,7 +77,8 @@ void rtc_init(void)
             error("RTC error: LSI clock initialization failed.");
         }
         // Connect LSI to RTC
-        __HAL_RCC_RTC_CLKPRESCALER(RCC_RTCCLKSOURCE_LSI);
+#warning "jagomo: __HAL_RCC_RTC_CLKPRESCALER(RCC_RTCCLKSOURCE_LSI);"
+        //__HAL_RCC_RTC_CLKPRESCALER(RCC_RTCCLKSOURCE_LSI);
         __HAL_RCC_RTC_CONFIG(RCC_RTCCLKSOURCE_LSI);
         // [TODO] This value is LSI typical value. To be measured precisely using a timer input capture
         rtc_freq = LSI_VALUE;
