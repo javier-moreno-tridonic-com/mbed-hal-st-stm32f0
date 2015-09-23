@@ -426,10 +426,9 @@ void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable)
 
 int serial_getc(serial_t *obj)
 {
-#warning "jagomo: DR -> TDR"
     USART_TypeDef *uart = (USART_TypeDef *)(obj->uart);
     while (!serial_readable(obj));
-    return (int)(uart->TDR & 0x1FF);
+    return (int)(uart->RDR & 0x1FF);
 }
 
 void serial_putc(serial_t *obj, int c)
