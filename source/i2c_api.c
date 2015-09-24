@@ -60,6 +60,7 @@ void i2c_init(i2c_t *obj, PinName sda, PinName scl)
     // Enable I2C1 clock and pinout if not done
     if ((obj->i2c == I2C_1) && !i2c1_inited) {
         i2c1_inited = 1;
+        __I2C1_CONFIG(RCC_I2C1CLKSOURCE_SYSCLK);
         __I2C1_CLK_ENABLE();
         // Configure I2C pins
         pinmap_pinout(sda, PinMap_I2C_SDA);
@@ -102,16 +103,49 @@ void i2c_init(i2c_t *obj, PinName sda, PinName scl)
 
 void i2c_frequency(i2c_t *obj, int hz)
 {
-    MBED_ASSERT((hz != 0) && (hz <= 400000));
+    MBED_ASSERT((hz == 100000) || (hz == 400000) || (hz == 1000000));
     I2cHandle.Instance = (I2C_TypeDef *)(obj->i2c);
     int timeout;
+    uint32_t tim;
 
     // wait before init
     timeout = LONG_TIMEOUT;
     while ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_BUSY)) && (timeout-- != 0));
+/*
+    switch (hz) {
+		case 100000:
+			tim = 0x00201D2B; // Standard mode
+			break;
+		case 200000:
+			tim = 0x0010021E; // Fast mode
+			break;
+		case 400000:
+			tim = 0x0010020A; // Fast mode
+			break;
+		default:
+			tim = 0x00201D2B; // Standard mode as default
+			break;
+    }
+*/
+
+    switch (hz) {
+   		case 100000:
+   			tim = 0x10805E89; // Standard mode
+   			break;
+   		case 200000:
+   			tim = 0x00901850; // Fast mode
+   			break;
+   		case 400000:
+   			tim = 0x00700818; // Fast mode
+   			break;
+   		default:
+   			tim = 0x10805E89; // Standard mode as default
+   			break;
+       }
 
     // I2C configuration
     I2cHandle.Init.AddressingMode  = I2C_ADDRESSINGMODE_7BIT;
+    #warning "I2C clock speed"
     //I2cHandle.Init.ClockSpeed      = hz;
     I2cHandle.Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
     //I2cHandle.Init.DutyCycle       = I2C_DUTYCYCLE_2;
@@ -119,18 +153,22 @@ void i2c_frequency(i2c_t *obj, int hz)
     I2cHandle.Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;
     I2cHandle.Init.OwnAddress1     = 0;
     I2cHandle.Init.OwnAddress2     = 0;
+    I2cHandle.Init.OwnAddress2Masks = I2C_OA2_NOMASK;
+    I2cHandle.Init.Timing 		    = tim; //@mor Calculated with excel tool provided in ST AN4235
+
     HAL_I2C_Init(&I2cHandle);
     if (obj->slave) {
         /* Enable Address Acknowledge */
         //I2cHandle.Instance->CR1 |= I2C_CR1_ACK;
+        #warning "I2cHandle.Instance->CR1 |= I2C_CR1_ACK;"
     }
 
 }
 
 inline int i2c_start(i2c_t *obj)
 {
-    //I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
-    //int timeout;
+    I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
+    int timeout;
 
     I2cHandle.Instance = (I2C_TypeDef *)(obj->i2c);
 
@@ -138,79 +176,110 @@ inline int i2c_start(i2c_t *obj)
     __HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_AF);
 
     // Generate the START condition
-    //i2c->CR1 |= I2C_CR1_START;
+    i2c->CR2 |= I2C_CR2_START; //@mor according to specs the start bit is in the CR2 for the
+    #warning "i2c->CR1 |= I2C_CR1_START;"
 
     // Wait the START condition has been correctly sent
-//    timeout = FLAG_TIMEOUT;
-//    while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_SB) == RESET) {
-//        if ((timeout--) == 0) {
-//            return 1;
-//        }
-//    }
+    //@mor is this part necessary???
+    //#mab:
+     timeout = FLAG_TIMEOUT;
+     while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_BUSY) == RESET) {
+         if ((timeout--) == 0) {
+             return 1;
+         }
+     }
 
     return 0;
 }
 
 inline int i2c_stop(i2c_t *obj)
 {
-    //I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
+    I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
 
     // Generate the STOP condition
-    //i2c->CR1 |= I2C_CR1_STOP;
+    //i2c->CR1 |= I2C_CR1_STOP; //@mor
+    i2c->CR2 |= I2C_CR2_STOP;
 
     return 0;
 }
 
 int i2c_read(i2c_t *obj, int address, char *data, int length, int stop)
 {
-    //I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
+    I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
     I2cHandle.Instance = (I2C_TypeDef *)(obj->i2c);
     int timeout;
     int count;
     int value;
 
-    i2c_start(obj);
+    //@mor from mbed2 i2c_api.c for nucleo f072
+    /* update CR2 register */
+    i2c->CR2 = (i2c->CR2 & (uint32_t)~((uint32_t)(I2C_CR2_SADD | I2C_CR2_NBYTES | I2C_CR2_RELOAD | I2C_CR2_AUTOEND | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP)))
+                | (uint32_t)(((uint32_t)address & I2C_CR2_SADD) | (((uint32_t)length << 16) & I2C_CR2_NBYTES) | (uint32_t)I2C_SOFTEND_MODE | (uint32_t)I2C_GENERATE_START_READ);
 
-    // Wait until SB flag is set
-//    timeout = FLAG_TIMEOUT;
-//    while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_SB) == RESET) {
-//        timeout--;
-//        if (timeout == 0) {
-//            return -1;
-//        }
-//    }
+    // Read all bytes
+    for (count = 0; count < length; count++) {
+    	value = i2c_byte_read(obj, 0);
+    	data[count] = (char)value;
+    }
+    //@mor end
 
-
-    //i2c->DR = __HAL_I2C_7BIT_ADD_READ(address);
-    //i2c->RXDR = __HAL_I2C_7BIT_ADD_READ(address);
-
-
-    // Wait address is acknowledged
+    // Wait until transfer is complete
+    //@mor I2C_FLAG_SB -> I2C_FLAG_TC
     timeout = FLAG_TIMEOUT;
-    while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_ADDR) == RESET) {
+     while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_TC) == RESET) {
+         timeout--;
+         if (timeout == 0) {
+             return -1;
+         }
+     }
+     __HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_TC);
+
+     // If not repeated start, send stop.
+     if (stop) {
+    	 i2c_stop(obj);
+    	 /* Wait until STOPF flag is set */
+    timeout = FLAG_TIMEOUT;
+    	 while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_STOPF) == RESET) {
         timeout--;
         if (timeout == 0) {
             return -1;
         }
     }
+    	 /* Clear STOP Flag */
+    	 __HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_STOPF);
+     }
+
+
+    //i2c->RXDR = __HAL_I2C_7BIT_ADD_READ(address); //@mor
+
+     //@mor looks like the address is already provided when they write the CR2
+     //also the behavior is different.
+    // Wait address is acknowledged
+//    timeout = FLAG_TIMEOUT;
+//    while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_ADDR) == RESET) {
+//        timeout--;
+//        if (timeout == 0) {
+//            return -1;
+//        }
+//    }
     //__HAL_I2C_CLEAR_ADDRFLAG(&I2cHandle);
-    __HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_ADDR);
+    //__HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_ADDR);
 
     // Read all bytes except last one
-    for (count = 0; count < (length - 1); count++) {
-        value = i2c_byte_read(obj, 0);
-        data[count] = (char)value;
-    }
+//    for (count = 0; count < (length - 1); count++) {
+//        value = i2c_byte_read(obj, 0);
+//        data[count] = (char)value;
+//    }
 
     // If not repeated start, send stop.
     // Warning: must be done BEFORE the data is read.
-    if (stop) {
-        i2c_stop(obj);
-    }
-
-    // Read the last byte
-    value = i2c_byte_read(obj, 1);
-    data[count] = (char)value;
+//    if (stop) {
+//        i2c_stop(obj);
+//    }
+//
+//    // Read the last byte
+//    value = i2c_byte_read(obj, 1);
+//    data[count] = (char)value;
 
     return length;
 }
@@ -222,7 +291,41 @@ int i2c_write(i2c_t *obj, int address, const char *data, int length, int stop)
     int timeout;
     int count;
 
-    i2c_start(obj);
+    /* update CR2 register */ //@mor
+    i2c->CR2 = (i2c->CR2 & (uint32_t)~((uint32_t)(I2C_CR2_SADD | I2C_CR2_NBYTES | I2C_CR2_RELOAD | I2C_CR2_AUTOEND | I2C_CR2_RD_WRN | I2C_CR2_START | I2C_CR2_STOP)))
+               | (uint32_t)(((uint32_t)address & I2C_CR2_SADD) | (((uint32_t)length << 16) & I2C_CR2_NBYTES) | (uint32_t)I2C_SOFTEND_MODE | (uint32_t)I2C_GENERATE_START_WRITE);
+
+    //Write all the data
+    for (count = 0; count < length; count++) {
+    	i2c_byte_write(obj, data[count]);
+    }
+
+    // Wait transfer complete
+    timeout = FLAG_TIMEOUT;
+    while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_TC) == RESET) {
+    	timeout--;
+    	if (timeout == 0) {
+    		return -1;
+    	}
+    }
+    __HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_TC);
+
+    // If not repeated start, send stop.
+    if (stop) {
+    	i2c_stop(obj);
+    	/* Wait until STOPF flag is set */
+    	timeout = FLAG_TIMEOUT;
+    	while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_STOPF) == RESET) {
+    		timeout--;
+    		if (timeout == 0) {
+    			return -1;
+    		}
+    	}
+    	/* Clear STOP Flag */
+    	__HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_STOPF);
+    }
+
+    //i2c_start(obj); //@mor
 
     // Wait until SB flag is set
 //    timeout = FLAG_TIMEOUT;
@@ -232,12 +335,10 @@ int i2c_write(i2c_t *obj, int address, const char *data, int length, int stop)
 //            return -1;
 //        }
 //    }
+    //
+    //i2c->TXDR = __HAL_I2C_7BIT_ADD_WRITE(address); //@mor
 
-
-    //i2c->DR = __HAL_I2C_7BIT_ADD_WRITE(address);
-//    i2c->TXDR = __HAL_I2C_7BIT_ADD_WRITE(address);
-
-
+/*//@mor the procedure is different for the m0
     // Wait address is acknowledged
     timeout = FLAG_TIMEOUT;
     while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_ADDR) == RESET) {
@@ -260,7 +361,7 @@ int i2c_write(i2c_t *obj, int address, const char *data, int length, int stop)
     if (stop) {
         i2c_stop(obj);
     }
-
+*/
     return count;
 }
 
@@ -294,16 +395,17 @@ int i2c_byte_write(i2c_t *obj, int data)
     I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
     int timeout;
 
-    i2c->TXDR = (uint8_t)data;
-
-    // Wait until the byte is transmitted
+    // Wait until the previous byte is transmitted
     timeout = FLAG_TIMEOUT;
-    while ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_TXE) == RESET) /*&&
-            (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_BTF) == RESET)*//*jagomo*/) {
+    //@mor I2C_FLAG_TXE -> I2C_FLAG_TXIS
+    while ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_TXIS) == RESET) /*&&
+            (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_BTF) == RESET)*/ /* #mab*/) {
         if ((timeout--) == 0) {
             return 0;
         }
     }
+
+    i2c->TXDR = (uint8_t)data;
 
     return 1;
 }
