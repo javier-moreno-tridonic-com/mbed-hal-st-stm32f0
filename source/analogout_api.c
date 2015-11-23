@@ -49,11 +49,14 @@ void analogout_init(dac_t *obj, PinName pin) {
     obj->dac = (DACName)pinmap_peripheral(pin, PinMap_DAC);
     MBED_ASSERT(obj->dac != (DACName)NC);
 
+    // Get the functions (dac channel) from the pin and assign it to the object
+    uint32_t function = pinmap_function(pin, PinMap_DAC);
+    MBED_ASSERT(function != (uint32_t)NC);
+    // Save the channel for the write and read functions
+    obj->channel = STM_PIN_CHANNEL(function);
+
     // Configure GPIO
     pinmap_pinout(pin, PinMap_DAC);
-
-    // Save the channel for future use
-    obj->pin = pin;
 
     // Enable DAC clock
     __DAC1_CLK_ENABLE();
@@ -62,9 +65,9 @@ void analogout_init(dac_t *obj, PinName pin) {
     sConfig.DAC_Trigger      = DAC_TRIGGER_NONE;
     sConfig.DAC_OutputBuffer = DAC_OUTPUTBUFFER_DISABLE;
 
-    if (pin == PA_4) {
+    if (obj->channel == 1) {
         HAL_DAC_ConfigChannel(&DacHandle, &sConfig, DAC_CHANNEL_1);
-    } else { // PA_5
+    } else {
         HAL_DAC_ConfigChannel(&DacHandle, &sConfig, DAC_CHANNEL_2);
     }
 
@@ -82,22 +85,21 @@ void analogout_free(dac_t *obj) {
 }
 
 static inline void dac_write(dac_t *obj, int value) {
-    if (obj->pin == PA_4) {
+    if (obj->channel == 1) {
         HAL_DAC_SetValue(&DacHandle, DAC_CHANNEL_1, DAC_ALIGN_12B_R, (value & DAC_RANGE));
         HAL_DAC_Start(&DacHandle, DAC_CHANNEL_1);
-    } else if (obj->pin == PA_5) {
+    } else {
         HAL_DAC_SetValue(&DacHandle, DAC_CHANNEL_2, DAC_ALIGN_12B_R, (value & DAC_RANGE));
         HAL_DAC_Start(&DacHandle, DAC_CHANNEL_2);
     }
 }
 
 static inline int dac_read(dac_t *obj) {
-    if (obj->pin == PA_4) {
+    if (obj->channel == 1) {
         return (int)HAL_DAC_GetValue(&DacHandle, DAC_CHANNEL_1);
-    } else if (obj->pin == PA_5) {
+    } else {
         return (int)HAL_DAC_GetValue(&DacHandle, DAC_CHANNEL_2);
     }
-    return 0;	/* Just silented warning */
 }
 
 void analogout_write(dac_t *obj, float value) {
