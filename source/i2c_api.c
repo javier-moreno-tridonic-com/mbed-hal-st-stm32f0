@@ -60,7 +60,7 @@ void i2c_init(i2c_t *obj, PinName sda, PinName scl)
     // Enable I2C1 clock and pinout if not done
     if ((obj->i2c == I2C_1) && !i2c1_inited) {
         i2c1_inited = 1;
-        __I2C1_CONFIG(RCC_I2C1CLKSOURCE_SYSCLK);
+        __HAL_RCC_I2C1_CONFIG(RCC_I2C1CLKSOURCE_SYSCLK);
         __I2C1_CLK_ENABLE();
         // Configure I2C pins
         pinmap_pinout(sda, PinMap_I2C_SDA);
