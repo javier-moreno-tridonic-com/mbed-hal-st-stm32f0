@@ -1,6 +1,6 @@
 /* mbed Microcontroller Library
  *******************************************************************************
- * Copyright (c) 2015, STMicroelectronics
+ * Copyright (c) 2014, STMicroelectronics
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,425 +34,459 @@
 #if DEVICE_SERIAL
 
 #include "cmsis.h"
+#include <stdbool.h>
 #include "pinmap.h"
 #include <string.h>
 #include "PeripheralPins.h"
-#include "mbed-drivers/mbed_error.h"
+#include "target_config.h"
 
-#if defined (TARGET_STM32F091RC)
-#define UART_NUM (8)
+#define DEBUG_STDIO 0
 
-static uint32_t serial_irq_ids[UART_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
-
-#elif defined (TARGET_STM32F030R8) || defined (TARGET_STM32F051R8) || defined (TARGET_STM32F042K6)
-#define UART_NUM (2)
-
-static uint32_t serial_irq_ids[UART_NUM] = {0, 0};
-
-#elif defined (TARGET_STM32F031K6)
-#define UART_NUM (1)
-
-static uint32_t serial_irq_ids[UART_NUM] = {0};
-
-#else
-#define UART_NUM (4)
-
-static uint32_t serial_irq_ids[UART_NUM] = {0, 0, 0, 0};
-
+#ifndef DEBUG_STDIO
+#   define DEBUG_STDIO 0
 #endif
 
-static uart_irq_handler irq_handler;
+#if DEBUG_STDIO
+#   include <stdio.h>
+#   define DEBUG_PRINTF(...) do { printf(__VA_ARGS__); } while(0)
+#else
+#   define DEBUG_PRINTF(...) {}
+#endif
 
-UART_HandleTypeDef UartHandle;
+#define UART_NUM (8)
+
+static UART_HandleTypeDef UartHandle[UART_NUM];
+
+static const IRQn_Type UartIRQs[UART_NUM] = {
+#if defined(USART1_BASE)
+    USART1_IRQn,
+#else
+    0,
+#endif
+#if defined(USART2_BASE)
+    USART2_IRQn,
+#else
+    0,
+#endif
+#if defined(USART3_BASE)
+    USART3_8_IRQn,
+#else
+    0,
+#endif
+#if defined(USART4_BASE)
+    USART3_8_IRQn,
+#else
+    0,
+#endif
+#if defined(USART5_BASE)
+    USART3_8_IRQn,
+#else
+    0,
+#endif
+#if defined(USART6_BASE)
+    USART3_8_IRQn,
+#else
+    0,
+#endif
+#if defined(USART7_BASE)
+    USART3_8_IRQn,
+#else
+    0,
+#endif
+#if defined(USART8_BASE)
+    USART3_8_IRQn,
+#else
+    0,
+#endif
+};
+
+static uint32_t serial_irq_ids[UART_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
+static uart_irq_handler irq_handlers[UART_NUM] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 int stdio_uart_inited = 0;
 serial_t stdio_uart;
 
-static void init_uart(serial_t *obj) {
-    UartHandle.Instance = (USART_TypeDef *)(obj->uart);
-
-    UartHandle.Init.BaudRate   = obj->baudrate;
-    UartHandle.Init.WordLength = obj->databits;
-    UartHandle.Init.StopBits   = obj->stopbits;
-    UartHandle.Init.Parity     = obj->parity;
-    UartHandle.Init.HwFlowCtl  = UART_HWCONTROL_NONE;
-
-    if (obj->pin_rx == NC) {
-        UartHandle.Init.Mode = UART_MODE_TX;
-    } else if (obj->pin_tx == NC) {
-        UartHandle.Init.Mode = UART_MODE_RX;
-    } else {
-        UartHandle.Init.Mode = UART_MODE_TX_RX;
-    }
-
-    // Disable the reception overrun detection
-    UartHandle.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_RXOVERRUNDISABLE_INIT;
-    UartHandle.AdvancedInit.OverrunDisable = UART_ADVFEATURE_OVERRUN_DISABLE;
-
-    HAL_UART_Init(&UartHandle);
-}
-
-void serial_init(serial_t *obj, PinName tx, PinName rx) {
+void serial_init(serial_t *obj, PinName tx, PinName rx)
+{
     // Determine the UART to use (UART_1, UART_2, ...)
     UARTName uart_tx = (UARTName)pinmap_peripheral(tx, PinMap_UART_TX);
     UARTName uart_rx = (UARTName)pinmap_peripheral(rx, PinMap_UART_RX);
 
     // Get the peripheral name (UART_1, UART_2, ...) from the pin and assign it to the object
-    obj->uart = (UARTName)pinmap_merge(uart_tx, uart_rx);
-    MBED_ASSERT(obj->uart != (UARTName)NC);
+    UARTName instance = (UARTName)pinmap_merge(uart_tx, uart_rx);
+    MBED_ASSERT(instance != (UARTName)NC);
 
     // Enable USART clock
-    if (obj->uart == UART_1) {
-        __USART1_CLK_ENABLE();
-        obj->index = 0;
-    }
-
-#if defined USART2_BASE
-    if (obj->uart == UART_2) {
-        __USART2_CLK_ENABLE();
-        obj->index = 1;
-    }
+    switch (instance) {
+#if defined(USART1_BASE)
+        case UART_1:
+            __USART1_CLK_ENABLE();
+            obj->serial.module = 0;
+            break;
+#endif            
+#if defined(USART2_BASE)            
+        case UART_2:
+            __USART2_CLK_ENABLE();
+            obj->serial.module = 1;
+            break;
+#endif            
+#if defined(USART3_BASE)
+        case UART_3:
+            __USART3_CLK_ENABLE();
+            obj->serial.module = 2;
+            break;
 #endif
-
-#if defined USART3_BASE
-    if (obj->uart == UART_3) {
-        __USART3_CLK_ENABLE();
-        obj->index = 2;
-    }
+#if defined(USART4_BASE)
+        case UART_4:
+            __USART4_CLK_ENABLE();
+            obj->serial.module = 3;
+            break;
 #endif
-
-#if defined USART4_BASE
-    if (obj->uart == UART_4) {
-        __USART4_CLK_ENABLE();
-        obj->index = 3;
-    }
+#if defined(USART5_BASE)
+        case UART_5:
+            __USART5_CLK_ENABLE();
+            obj->serial.module = 4;
+            break;
 #endif
-
-#if defined USART5_BASE
-    if (obj->uart == UART_5) {
-        __USART5_CLK_ENABLE();
-        obj->index = 4;
-    }
+#if defined(USART6_BASE)
+        case UART_6:
+            __USART6_CLK_ENABLE();
+            obj->serial.module = 5;
+            break;
+#endif            
+#if defined(USART7_BASE)
+        case UART_7:
+            __USART7_CLK_ENABLE();
+            obj->serial.module = 6;
+            break;
 #endif
-
-#if defined USART6_BASE
-    if (obj->uart == UART_6) {
-        __USART6_CLK_ENABLE();
-        obj->index = 5;
-    }
+#if defined(USART8_BASE)
+        case UART_8:
+            __USART8_CLK_ENABLE();
+            obj->serial.module = 7;
+            break;
 #endif
-
-#if defined USART7_BASE
-    if (obj->uart == UART_7) {
-        __USART7_CLK_ENABLE();
-        obj->index = 6;
     }
-#endif
-
-#if defined USART8_BASE
-    if (obj->uart == UART_8) {
-        __USART8_CLK_ENABLE();
-        obj->index = 7;
-    }
-#endif
 
     // Configure the UART pins
     pinmap_pinout(tx, PinMap_UART_TX);
     pinmap_pinout(rx, PinMap_UART_RX);
-    if (tx != NC) {
-        pin_mode(tx, PullUp);
+    if (tx != NC) pin_mode(tx, PullUp);
+    if (rx != NC) pin_mode(rx, PullUp);
+    obj->serial.pin_tx = tx;
+    obj->serial.pin_rx = rx;
+
+    // initialize the handle for this master!
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+
+    handle->Instance            = (USART_TypeDef *)instance;
+    handle->Init.BaudRate       = 9600;
+    handle->Init.WordLength     = UART_WORDLENGTH_8B;
+    handle->Init.StopBits       = UART_STOPBITS_1;
+    handle->Init.Parity         = UART_PARITY_NONE;
+    if (rx == NC) {
+        handle->Init.Mode = UART_MODE_TX;
+    } else if (tx == NC) {
+        handle->Init.Mode = UART_MODE_RX;
+    } else {
+        handle->Init.Mode = UART_MODE_TX_RX;
     }
-    if (rx != NC) {
-        pin_mode(rx, PullUp);
-    }
+    handle->Init.HwFlowCtl      = UART_HWCONTROL_NONE;
+    handle->Init.OverSampling   = UART_OVERSAMPLING_16;
+    handle->TxXferCount         = 0;
+    handle->RxXferCount         = 0;
 
-    // Configure UART
-    obj->baudrate = 9600;
-    obj->databits = UART_WORDLENGTH_8B;
-    obj->stopbits = UART_STOPBITS_1;
-    obj->parity   = UART_PARITY_NONE;
-
-    obj->pin_tx = tx;
-    obj->pin_rx = rx;
-
-    init_uart(obj);
+    // Disable the reception overrun detection
+    handle->AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_RXOVERRUNDISABLE_INIT;
+    handle->AdvancedInit.OverrunDisable = UART_ADVFEATURE_OVERRUN_DISABLE;
+    
+    HAL_UART_Init(handle);
 
     // For stdio management
-    if (obj->uart == STDIO_UART) {
+    if (tx == STDIO_UART_TX && rx == STDIO_UART_RX) {
         stdio_uart_inited = 1;
         memcpy(&stdio_uart, obj, sizeof(serial_t));
     }
+
+    // DEBUG_PRINTF("UART%u: Init\n", obj->serial.module+1);
 }
 
-void serial_free(serial_t *obj) {
+void serial_free(serial_t *obj)
+{
     // Reset UART and disable clock
-    if (obj->uart == UART_1) {
-        __USART1_FORCE_RESET();
-        __USART1_RELEASE_RESET();
-        __USART1_CLK_DISABLE();
-    }
-
-#if defined(USART2_BASE)
-    if (obj->uart == UART_2) {
-        __USART2_FORCE_RESET();
-        __USART2_RELEASE_RESET();
-        __USART2_CLK_DISABLE();
-    }
+    switch (obj->serial.module) {
+#if defined(USART1_BASE)        
+        case 0:
+            __USART1_FORCE_RESET();
+            __USART1_RELEASE_RESET();
+            __USART1_CLK_DISABLE();
+            break;
+#endif            
+#if defined(USART2_BASE)            
+        case 1:
+            __USART2_FORCE_RESET();
+            __USART2_RELEASE_RESET();
+            __USART2_CLK_DISABLE();
+            break;
+#endif            
+#if defined(USART3_BASE)
+        case 2:
+            __USART3_FORCE_RESET();
+            __USART3_RELEASE_RESET();
+            __USART3_CLK_DISABLE();
+            break;
 #endif
-
-#if defined USART3_BASE
-    if (obj->uart == UART_3) {
-        __USART3_FORCE_RESET();
-        __USART3_RELEASE_RESET();
-        __USART3_CLK_DISABLE();
-    }
+#if defined(USART4_BASE)
+        case 3:
+            __USART4_FORCE_RESET();
+            __USART4_RELEASE_RESET();
+            __USART4_CLK_DISABLE();
+            break;
 #endif
-
-#if defined USART4_BASE
-    if (obj->uart == UART_4) {
-        __USART4_FORCE_RESET();
-        __USART4_RELEASE_RESET();
-        __USART4_CLK_DISABLE();
-    }
+#if defined(USART5_BASE)
+        case 4:
+            __USART5_FORCE_RESET();
+            __USART5_RELEASE_RESET();
+            __USART5_CLK_DISABLE();
+            break;
 #endif
-
-#if defined USART5_BASE
-    if (obj->uart == UART_5) {
-        __USART5_FORCE_RESET();
-        __USART5_RELEASE_RESET();
-        __USART5_CLK_DISABLE();
-    }
+#if defined(USART6_BASE)
+        case 5:
+            __USART6_FORCE_RESET();
+            __USART6_RELEASE_RESET();
+            __USART6_CLK_DISABLE();
+            break;
+#endif            
+#if defined(USART7_BASE)
+        case 6:
+            __USART7_FORCE_RESET();
+            __USART7_RELEASE_RESET();
+            __USART7_CLK_DISABLE();
+            break;
 #endif
-
-#if defined USART6_BASE
-    if (obj->uart == UART_6) {
-        __USART6_FORCE_RESET();
-        __USART6_RELEASE_RESET();
-        __USART6_CLK_DISABLE();
-    }
+#if defined(USART8_BASE)
+        case 7:
+            __USART8_FORCE_RESET();
+            __USART8_RELEASE_RESET();
+            __USART8_CLK_DISABLE();
+            break;
 #endif
-
-#if defined USART7_BASE
-    if (obj->uart == UART_7) {
-        __USART7_FORCE_RESET();
-        __USART7_RELEASE_RESET();
-        __USART7_CLK_DISABLE();
     }
-#endif
-
-#if defined USART8_BASE
-    if (obj->uart == UART_8) {
-        __USART8_FORCE_RESET();
-        __USART8_RELEASE_RESET();
-        __USART8_CLK_DISABLE();
-    }
-#endif
-
-
+    
     // Configure GPIOs
-    pin_function(obj->pin_tx, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
-    pin_function(obj->pin_rx, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
+    pin_function(obj->serial.pin_tx, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
+    pin_function(obj->serial.pin_rx, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
 
-    serial_irq_ids[obj->index] = 0;
+    DEBUG_PRINTF("UART%u: Free\n", obj->serial.module+1);
 }
 
-void serial_baud(serial_t *obj, int baudrate) {
-    obj->baudrate = baudrate;
-    init_uart(obj);
+void serial_baud(serial_t *obj, int baudrate)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    handle->Init.BaudRate = baudrate;
+
+    HAL_UART_Init(handle);
+
+    DEBUG_PRINTF("UART%u: Baudrate: %u\n", obj->serial.module+1, baudrate);
 }
 
-void serial_format(serial_t *obj, int data_bits, SerialParity parity, int stop_bits) {
-    if (data_bits == 9) {
-        obj->databits = UART_WORDLENGTH_9B;
+void serial_format(serial_t *obj, int data_bits, SerialParity parity, int stop_bits)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+
+    if (data_bits > 8) {
+        handle->Init.WordLength = UART_WORDLENGTH_9B;
     } else {
-        obj->databits = UART_WORDLENGTH_8B;
+        handle->Init.WordLength = UART_WORDLENGTH_8B;
     }
 
     switch (parity) {
         case ParityOdd:
-        case ParityForced0:
-            obj->parity = UART_PARITY_ODD;
+            handle->Init.Parity = UART_PARITY_ODD;
             break;
         case ParityEven:
-        case ParityForced1:
-            obj->parity = UART_PARITY_EVEN;
+            handle->Init.Parity = UART_PARITY_EVEN;
             break;
         default: // ParityNone
-            obj->parity = UART_PARITY_NONE;
+        case ParityForced0: // unsupported!
+        case ParityForced1: // unsupported!
+            handle->Init.Parity = UART_PARITY_NONE;
             break;
     }
 
     if (stop_bits == 2) {
-        obj->stopbits = UART_STOPBITS_2;
+        handle->Init.StopBits = UART_STOPBITS_2;
     } else {
-        obj->stopbits = UART_STOPBITS_1;
+        handle->Init.StopBits = UART_STOPBITS_1;
     }
 
-    init_uart(obj);
+    HAL_UART_Init(handle);
+
+    DEBUG_PRINTF("UART%u: Format: %u, %u, %u\n", obj->serial.module+1, data_bits, parity, stop_bits);
 }
 
 /******************************************************************************
  * INTERRUPTS HANDLING
  ******************************************************************************/
 
-static void uart_irq(UARTName name, int id) {
-    UartHandle.Instance = (USART_TypeDef *)name;
+static void uart_irq(uint8_t id)
+{
+    UART_HandleTypeDef *handle = &UartHandle[id];
+
     if (serial_irq_ids[id] != 0) {
-        if (__HAL_UART_GET_FLAG(&UartHandle, UART_FLAG_TC) != RESET) {
-            irq_handler(serial_irq_ids[id], TxIrq);
-            __HAL_UART_CLEAR_IT(&UartHandle, UART_FLAG_TC);
+        if (__HAL_UART_GET_FLAG(handle, UART_FLAG_TC) != RESET) {
+            irq_handlers[id](serial_irq_ids[id], TxIrq);
+            __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_TC);
         }
-        if (__HAL_UART_GET_FLAG(&UartHandle, UART_FLAG_RXNE) != RESET) {
-            irq_handler(serial_irq_ids[id], RxIrq);
-            volatile uint32_t tmpval = UartHandle.Instance->RDR; // Clear RXNE bit
+        if (__HAL_UART_GET_FLAG(handle, UART_FLAG_RXNE) != RESET) {
+            irq_handlers[id](serial_irq_ids[id], RxIrq);
+            __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_RXNE);
         }
     }
 }
 
-static void uart1_irq(void) {
-    uart_irq(UART_1, 0);
+#if defined(USART1_BASE)
+static void uart1_irq(void)
+{
+    uart_irq(0);
 }
+#endif
 
 #if defined(USART2_BASE)
-static void uart2_irq(void) {
-    uart_irq(UART_2, 1);
+static void uart2_irq(void)
+{
+    uart_irq(1);
 }
 #endif
 
-#if defined USART3_BASE
-static void uart3_irq(void) {
-    uart_irq(UART_3, 2);
-}
-#endif
-
-#if defined USART4_BASE
-static void uart4_irq(void) {
-    uart_irq(UART_4, 3);
-}
-#endif
-
-#if defined USART5_BASE
-static void uart5_irq(void) {
-    uart_irq(UART_5, 4);
-}
-#endif
-
-#if defined USART6_BASE
-static void uart6_irq(void) {
-    uart_irq(UART_6, 5);
-}
-#endif
-
-#if defined USART7_BASE
-static void uart7_irq(void) {
-    uart_irq(UART_7, 6);
-}
-#endif
-
-#if defined USART8_BASE
-static void uart8_irq(void) {
-    uart_irq(UART_8, 7);
-}
-#endif
-
-void serial_irq_handler(serial_t *obj, uart_irq_handler handler, uint32_t id) {
-    irq_handler = handler;
-    serial_irq_ids[obj->index] = id;
-}
-
-void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable) {
-    IRQn_Type irq_n = (IRQn_Type)0;
-    uint32_t vector = 0;
-
-    UartHandle.Instance = (USART_TypeDef *)(obj->uart);
-
-    if (obj->uart == UART_1) {
-        irq_n = USART1_IRQn;
-        vector = (uint32_t)&uart1_irq;
-    }
-
-#if defined(USART2_BASE)
-    if (obj->uart == UART_2) {
-        irq_n = USART2_IRQn;
-        vector = (uint32_t)&uart2_irq;
-    }
-#endif
-
-#if defined (TARGET_STM32F091RC)
-    if (obj->uart == UART_3) {
-        irq_n = USART3_8_IRQn;
-        vector = (uint32_t)&uart3_irq;
-    }
-
-    if (obj->uart == UART_4) {
-        irq_n = USART3_8_IRQn;
-        vector = (uint32_t)&uart4_irq;
-    }
-
-    if (obj->uart == UART_5) {
-        irq_n = USART3_8_IRQn;
-        vector = (uint32_t)&uart5_irq;
-    }
-
-    if (obj->uart == UART_6) {
-        irq_n = USART3_8_IRQn;
-        vector = (uint32_t)&uart6_irq;
-    }
-
-    if (obj->uart == UART_7) {
-        irq_n = USART3_8_IRQn;
-        vector = (uint32_t)&uart7_irq;
-    }
-
-    if (obj->uart == UART_8) {
-        irq_n = USART3_8_IRQn;
-        vector = (uint32_t)&uart8_irq;
-    }
-
-#elif defined (TARGET_STM32F030R8) || defined (TARGET_STM32F051R8)
-
-#else
 #if defined(USART3_BASE)
-    if (obj->uart == UART_3) {
-        irq_n = USART3_4_IRQn;
-        vector = (uint32_t)&uart3_irq;
-    }
+static void uart3_irq(void)
+{
+    uart_irq(2);
+}
 #endif
 
 #if defined(USART4_BASE)
-    if (obj->uart == UART_4) {
-        irq_n = USART3_4_IRQn;
-        vector = (uint32_t)&uart4_irq;
-    }
+static void uart4_irq(void)
+{
+    uart_irq(3);
+}
 #endif
+
+#if defined(USART5_BASE)
+static void uart5_irq(void)
+{
+    uart_irq(4);
+}
 #endif
+
+#if defined(USART6_BASE)
+static void uart6_irq(void)
+{
+    uart_irq(5);
+}
+#endif
+
+#if defined(USART7_BASE)
+static void uart7_irq(void)
+{
+    uart_irq(6);
+}
+#endif
+
+#if defined(USART8_BASE)
+static void uart8_irq(void)
+{
+    uart_irq(7);
+}
+#endif
+
+static const uint32_t uart_irq_vectors[UART_NUM] = {
+#if defined(USART1_BASE)
+    (uint32_t)&uart1_irq,
+#else
+    0,
+#endif
+#if defined(USART2_BASE)
+    (uint32_t)&uart2_irq,
+#else
+    0,
+#endif
+#if defined(USART3_BASE)
+    (uint32_t)&uart3_irq,
+#else
+    0,
+#endif
+#if defined(USART4_BASE)
+    (uint32_t)&uart4_irq,
+#else
+    0,
+#endif
+#if defined(USART5_BASE)
+    (uint32_t)&uart5_irq,
+#else
+    0,
+#endif
+#if defined(USART6_BASE)
+    (uint32_t)&uart6_irq,
+#else
+    0,
+#endif
+#if defined(USART7_BASE)
+    (uint32_t)&uart7_irq,
+#else
+    0,
+#endif
+#if defined(USART8_BASE)
+    (uint32_t)&uart8_irq
+#else
+    0
+#endif
+};
+
+void serial_irq_handler(serial_t *obj, uart_irq_handler handler, uint32_t id)
+{
+    irq_handlers[obj->serial.module] = handler;
+    serial_irq_ids[obj->serial.module] = id;
+}
+
+void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    IRQn_Type irq_n = UartIRQs[obj->serial.module];
+    uint32_t vector = uart_irq_vectors[obj->serial.module];
+
+    if (!irq_n || !vector)
+        return;
 
     if (enable) {
 
         if (irq == RxIrq) {
-            __HAL_UART_ENABLE_IT(&UartHandle, UART_IT_RXNE);
+            __HAL_UART_ENABLE_IT(handle, UART_IT_RXNE);
         } else { // TxIrq
-            __HAL_UART_ENABLE_IT(&UartHandle, UART_IT_TC);
+            __HAL_UART_ENABLE_IT(handle, UART_IT_TC);
         }
 
-        NVIC_SetVector(irq_n, vector);
-        NVIC_EnableIRQ(irq_n);
+        vIRQ_SetVector(irq_n, vector);
+        vIRQ_EnableIRQ(irq_n);
 
     } else { // disable
 
         int all_disabled = 0;
 
         if (irq == RxIrq) {
-            __HAL_UART_DISABLE_IT(&UartHandle, UART_IT_RXNE);
+            __HAL_UART_DISABLE_IT(handle, UART_IT_RXNE);
             // Check if TxIrq is disabled too
-            if ((UartHandle.Instance->CR1 & USART_CR1_TCIE) == 0) all_disabled = 1;
+            // TODO: or use USART_CR1_TCIE ?
+            if ((handle->Instance->CR1 & USART_CR1_TXEIE) == 0) all_disabled = 1;
         } else { // TxIrq
-            __HAL_UART_DISABLE_IT(&UartHandle, UART_IT_TC);
+            // TODO: or use UART_IT_TC ?
+            __HAL_UART_DISABLE_IT(handle, UART_IT_TXE);
             // Check if RxIrq is disabled too
-            if ((UartHandle.Instance->CR1 & USART_CR1_RXNEIE) == 0) all_disabled = 1;
+            if ((handle->Instance->CR1 & USART_CR1_RXNEIE) == 0) all_disabled = 1;
         }
 
-        if (all_disabled) NVIC_DisableIRQ(irq_n);
+        if (all_disabled) vIRQ_DisableIRQ(irq_n);
 
     }
 }
@@ -461,50 +495,62 @@ void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable) {
  * READ/WRITE
  ******************************************************************************/
 
-int serial_getc(serial_t *obj) {
-    USART_TypeDef *uart = (USART_TypeDef *)(obj->uart);
+int serial_getc(serial_t *obj)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
     while (!serial_readable(obj));
-    return (int)(uart->RDR & (uint16_t)0xFF);
+    return (int)(handle->Instance->RDR & (uint16_t)0xFF);
 }
 
-void serial_putc(serial_t *obj, int c) {
-    USART_TypeDef *uart = (USART_TypeDef *)(obj->uart);
+void serial_putc(serial_t *obj, int c)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
     while (!serial_writable(obj));
-    uart->TDR = (uint32_t)(c & (uint16_t)0xFF);
+    handle->Instance->TDR = (uint32_t)(c & (uint16_t)0xFF);
 }
 
-int serial_readable(serial_t *obj) {
+int serial_readable(serial_t *obj)
+{
     int status;
-    UartHandle.Instance = (USART_TypeDef *)(obj->uart);
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
     // Check if data is received
-    status = ((__HAL_UART_GET_FLAG(&UartHandle, UART_FLAG_RXNE) != RESET) ? 1 : 0);
+    status = ((__HAL_UART_GET_FLAG(handle, UART_FLAG_RXNE) != RESET) ? 1 : 0);
     return status;
 }
 
-int serial_writable(serial_t *obj) {
+int serial_writable(serial_t *obj)
+{
     int status;
-    UartHandle.Instance = (USART_TypeDef *)(obj->uart);
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
     // Check if data is transmitted
-    status = ((__HAL_UART_GET_FLAG(&UartHandle, UART_FLAG_TXE) != RESET) ? 1 : 0);
+    status = ((__HAL_UART_GET_FLAG(handle, UART_FLAG_TXE) != RESET) ? 1 : 0);
     return status;
 }
 
-void serial_clear(serial_t *obj) {
-    UartHandle.Instance = (USART_TypeDef *)(obj->uart);
-    __HAL_UART_CLEAR_IT(&UartHandle, UART_FLAG_TC);
-    __HAL_UART_SEND_REQ(&UartHandle, UART_RXDATA_FLUSH_REQUEST);
+void serial_clear(serial_t *obj)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    // TODO: or use __HAL_UART_CLEAR_IT(handle, UART_FLAG_TC); ?
+    __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_TXE);
+    // TODO: or use __HAL_UART_SEND_REQ(handle, UART_RXDATA_FLUSH_REQUEST); ?
+    __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_RXNE);
 }
 
-void serial_pinout_tx(PinName tx) {
+void serial_pinout_tx(PinName tx)
+{
     pinmap_pinout(tx, PinMap_UART_TX);
 }
 
-void serial_break_set(serial_t *obj) {
+void serial_break_set(serial_t *obj)
+{
     // [TODO]
+    (void)obj;
 }
 
-void serial_break_clear(serial_t *obj) {
+void serial_break_clear(serial_t *obj)
+{
     // [TODO]
+    (void)obj;
 }
 
 #endif

@@ -50,9 +50,7 @@ void pwmout_init(pwmout_t* obj, PinName pin) {
     obj->inverted = STM_PIN_INVERTED(function);
 
     // Enable TIM clock
-#if defined(TIM1_BASE)
     if (obj->pwm == PWM_1) __TIM1_CLK_ENABLE();
-#endif
 #if defined(TIM2_BASE)
     if (obj->pwm == PWM_2) __TIM2_CLK_ENABLE();
 #endif
@@ -169,8 +167,9 @@ void pwmout_period_us(pwmout_t* obj, int us) {
 
     // Get the PCLK and APBCLK divider related to the timer
     switch (obj->pwm) {
-        // APB1 clock
-#if defined(TIM2_BASE)        
+        // APB clock
+        case PWM_1:
+#if defined(TIM2_BASE)
         case PWM_2:
 #endif
 #if defined(TIM3_BASE)        
@@ -178,15 +177,6 @@ void pwmout_period_us(pwmout_t* obj, int us) {
 #endif
 #if defined(TIM14_BASE)
         case PWM_14:
-#endif
-#if defined(TIM2_BASE) || defined(TIM3_BASE) || defined(TIM14_BASE)
-            PclkFreq = HAL_RCC_GetPCLK1Freq();
-            APBxCLKDivider = RCC_ClkInitStruct.APB1CLKDivider;
-            break;
-#endif
-        // APB2 clock
-#if defined(TIM1_BASE)
-        case PWM_1:
 #endif
 #if defined(TIM15_BASE)
         case PWM_15:
@@ -197,11 +187,9 @@ void pwmout_period_us(pwmout_t* obj, int us) {
 #if defined(TIM17_BASE)
         case PWM_17:
 #endif
-#if defined(TIM1_BASE) || defined(TIM15_BASE) || defined(TIM16_BASE) || defined(TIM17_BASE)
-            PclkFreq = HAL_RCC_GetPCLK2Freq();
-            APBxCLKDivider = RCC_ClkInitStruct.APB2CLKDivider;
+            PclkFreq = HAL_RCC_GetPCLK1Freq();
+            APBxCLKDivider = RCC_ClkInitStruct.APB1CLKDivider;
             break;
-#endif
         default:
             return;
     }

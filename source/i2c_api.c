@@ -247,6 +247,9 @@ int i2c_byte_read(i2c_t *obj, int last) {
     I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
     int timeout;
 
+     // Not used
+    (void)last;
+
     // Wait until the byte is received
     timeout = FLAG_TIMEOUT;
     while (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_RXNE) == RESET) {
@@ -300,6 +303,10 @@ void i2c_slave_address(i2c_t *obj, int idx, uint32_t address, uint32_t mask) {
     I2C_TypeDef *i2c = (I2C_TypeDef *)(obj->i2c);
     uint16_t tmpreg = 0;
 
+    // Not used
+    (void)idx;
+    (void)mask;
+    
     // disable
     i2c->OAR1 &= (uint32_t)(~I2C_OAR1_OA1EN);
     // Get the old register value
@@ -357,7 +364,7 @@ int i2c_slave_receive(i2c_t *obj) {
 }
 
 int i2c_slave_read(i2c_t *obj, char *data, int length) {
-    char size = 0;
+    int size = 0;
 
     while (size < length) data[size++] = (char)i2c_byte_read(obj, 0);
 
@@ -365,7 +372,7 @@ int i2c_slave_read(i2c_t *obj, char *data, int length) {
 }
 
 int i2c_slave_write(i2c_t *obj, const char *data, int length) {
-    char size = 0;
+    int size = 0;
     I2cHandle.Instance = (I2C_TypeDef *)(obj->i2c);
 
     do {

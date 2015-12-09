@@ -55,6 +55,9 @@ void analogout_init(dac_t *obj, PinName pin) {
     // Save the channel for the write and read functions
     obj->channel = STM_PIN_CHANNEL(function);
 
+    // Save the pin for future use
+    obj->pin = pin;
+    
     // Configure GPIO
     pinmap_pinout(pin, PinMap_DAC);
 
