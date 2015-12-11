@@ -477,11 +477,9 @@ void serial_irq_set(serial_t *obj, SerialIrq irq, uint32_t enable)
         if (irq == RxIrq) {
             __HAL_UART_DISABLE_IT(handle, UART_IT_RXNE);
             // Check if TxIrq is disabled too
-            // TODO: or use USART_CR1_TCIE ?
-            if ((handle->Instance->CR1 & USART_CR1_TXEIE) == 0) all_disabled = 1;
+            if ((handle->Instance->CR1 & USART_CR1_TCIE) == 0) all_disabled = 1;
         } else { // TxIrq
-            // TODO: or use UART_IT_TC ?
-            __HAL_UART_DISABLE_IT(handle, UART_IT_TXE);
+            __HAL_UART_DISABLE_IT(handle, UART_IT_TC);
             // Check if RxIrq is disabled too
             if ((handle->Instance->CR1 & USART_CR1_RXNEIE) == 0) all_disabled = 1;
         }
@@ -530,10 +528,8 @@ int serial_writable(serial_t *obj)
 void serial_clear(serial_t *obj)
 {
     UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
-    // TODO: or use __HAL_UART_CLEAR_IT(handle, UART_FLAG_TC); ?
-    __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_TXE);
-    // TODO: or use __HAL_UART_SEND_REQ(handle, UART_RXDATA_FLUSH_REQUEST); ?
-    __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_RXNE);
+    __HAL_UART_CLEAR_IT(handle, UART_FLAG_TC);
+    __HAL_UART_SEND_REQ(handle, UART_RXDATA_FLUSH_REQUEST);
 }
 
 void serial_pinout_tx(PinName tx)
