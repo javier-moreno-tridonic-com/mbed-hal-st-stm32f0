@@ -19,12 +19,12 @@
   ],
   "dependencies": {
     "uvisor-lib": "~0.7.0",
-    "mbed-hal-st-stm32cubef0": "~0.0.0",
-    "mbed-hal": "*"
+    "mbed-hal-st-stm32cubef0": "ivan-adzic-tridonic-com/mbed-hal-st-stm32cubef0#i2c-dma",
+    "mbed-hal": "ivan-adzic-tridonic-com/mbed-hal#i2c-dma"
   },
   "targetDependencies": {
     "stm32f091rc": {
-      "mbed-hal-st-stm32f091rc": "~0.0.0"
+      "mbed-hal-st-stm32f091rc": "ivan-adzic-tridonic-com/mbed-hal-st-stm32f091rc#i2c-dma"
     }
   }
 }
