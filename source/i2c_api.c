@@ -715,6 +715,17 @@ void I2C1_IRQHandler(void)
 	if (I2cHandle.Instance->ISR & (I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR)) {
 		HAL_I2C_ER_IRQHandler(&I2cHandle);
 	} else {
+		/* I2C Slave address match  ---------------------------------------------------*/
+		if ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_ADDR) == SET) &&
+		   (__HAL_I2C_GET_IT_SOURCE(&I2cHandle, I2C_IT_ADDRI) == SET))
+		{
+			I2cHandle.tDir = __HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_DIR);
+			/* Clear ADDR flag */
+			__HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_ADDR);
+			/* Call Address Matched callback */
+			g_cb_e_addr(&I2cHandle);
+		}
+
 		/* I2C Slave received Stop */
 		if ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_STOPF) == SET) &&
 		   (__HAL_I2C_GET_IT_SOURCE(&I2cHandle, I2C_IT_STOPI) == SET))
@@ -734,20 +745,11 @@ void I2C1_IRQHandler(void)
 
 				/* Configure DMA Stream data length */
 				//hdma_i2c1_rx.Instance->CNDTR = I2C_DATA_LENGTH_MAX;
+				HAL_I2C_SlaveRxCpltCallback(&I2cHandle);
 			}
 			/* Clear STOP Flag */
 			__HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_STOPF);
 			I2cHandle.State = HAL_I2C_STATE_READY;
-		}
-		/* I2C Slave address match  ---------------------------------------------------*/
-		if ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_ADDR) == SET) &&
-		   (__HAL_I2C_GET_IT_SOURCE(&I2cHandle, I2C_IT_ADDRI) == SET))
-		{
-			I2cHandle.tDir = __HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_DIR);
-			/* Clear ADDR flag */
-			__HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_ADDR);
-			/* Call Address Matched callback */
-			g_cb_e_addr(&I2cHandle);
 		}
   }
 }
