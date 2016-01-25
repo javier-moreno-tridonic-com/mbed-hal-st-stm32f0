@@ -2801,6 +2801,7 @@ void i2c_abort_asynch(i2c_t *obj)
     i2c_reset(obj);  
 }
 
+<<<<<<< HEAD
 #if DEVICE_I2CSLAVE
 uint32_t gevent=0;
 
@@ -2879,6 +2880,8 @@ uint32_t i2cslave_irq_handler_asynch(i2c_t *obj)
 
 #endif // DEVICE_I2CSLAVE
 
+=======
+>>>>>>> origin/master
 #endif //!DEVICE_I2C_ASYNCH_DMA
 
 #endif // DEVICE_I2C_ASYNCH

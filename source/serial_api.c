@@ -53,6 +53,10 @@
 #   define DEBUG_PRINTF(...) {}
 #endif
 
+#ifndef YOTTA_CFG_MBED_OS_STDIO_DEFAULT_BAUD
+#   define YOTTA_CFG_MBED_OS_STDIO_DEFAULT_BAUD 9600
+#endif
+
 #define UART_NUM (8)
 
 static UART_HandleTypeDef UartHandle[UART_NUM];
@@ -153,7 +157,7 @@ void serial_init(serial_t *obj, PinName tx, PinName rx)
             __USART6_CLK_ENABLE();
             obj->serial.module = 5;
             break;
-#endif            
+#endif
 #if defined(USART7_BASE)
         case UART_7:
             __USART7_CLK_ENABLE();
@@ -196,6 +200,10 @@ void serial_init(serial_t *obj, PinName tx, PinName rx)
     handle->TxXferCount         = 0;
     handle->RxXferCount         = 0;
 
+    if (tx == STDIO_UART_TX && rx == STDIO_UART_RX) {
+        handle->Init.BaudRate   = YOTTA_CFG_MBED_OS_STDIO_DEFAULT_BAUD;
+    }
+
     // Disable the reception overrun detection
     handle->AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_RXOVERRUNDISABLE_INIT;
     handle->AdvancedInit.OverrunDisable = UART_ADVFEATURE_OVERRUN_DISABLE;
@@ -208,7 +216,7 @@ void serial_init(serial_t *obj, PinName tx, PinName rx)
         memcpy(&stdio_uart, obj, sizeof(serial_t));
     }
 
-    // DEBUG_PRINTF("UART%u: Init\n", obj->serial.module+1);
+    DEBUG_PRINTF("UART%u: Init\n", obj->serial.module+1);
 }
 
 void serial_free(serial_t *obj)
@@ -256,7 +264,7 @@ void serial_free(serial_t *obj)
             __USART6_RELEASE_RESET();
             __USART6_CLK_DISABLE();
             break;
-#endif            
+#endif
 #if defined(USART7_BASE)
         case 6:
             __USART7_FORCE_RESET();
@@ -336,11 +344,12 @@ static void uart_irq(uint8_t id)
     if (serial_irq_ids[id] != 0) {
         if (__HAL_UART_GET_FLAG(handle, UART_FLAG_TC) != RESET) {
             irq_handlers[id](serial_irq_ids[id], TxIrq);
-            __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_TC);
+            __HAL_UART_CLEAR_IT(handle, UART_FLAG_TC);
         }
         if (__HAL_UART_GET_FLAG(handle, UART_FLAG_RXNE) != RESET) {
             irq_handlers[id](serial_irq_ids[id], RxIrq);
-            __HAL_UART_CLEAR_FLAG(handle, UART_FLAG_RXNE);
+            volatile uint32_t tmpval = handle->Instance->RDR; // Clear RXNE bit
+            (void)tmpval; // To remove the "unused variable" warning
         }
     }
 }
@@ -548,5 +557,239 @@ void serial_break_clear(serial_t *obj)
     // [TODO]
     (void)obj;
 }
+
+int serial_tx_asynch(serial_t *obj, void *tx, size_t tx_length, uint8_t tx_width, uint32_t handler, uint32_t event, DMAUsage hint)
+{
+    // TODO: DMA usage is currently ignored
+    (void) hint;
+
+    bool use_tx = (tx != NULL && tx_length > 0);
+    IRQn_Type irq_n = UartIRQs[obj->serial.module];
+
+    if (!use_tx || !irq_n)
+        return 0;
+
+    obj->tx_buff.buffer = tx;
+    obj->tx_buff.length = tx_length;
+    obj->tx_buff.pos    = 0;
+    obj->tx_buff.width  = tx_width;
+
+    obj->serial.event   = (obj->serial.event & ~SERIAL_EVENT_TX_MASK) | (event & SERIAL_EVENT_TX_MASK);
+
+    // register the thunking handler
+    vIRQ_SetVector(irq_n, handler);
+    vIRQ_EnableIRQ(irq_n);
+
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    // HAL_StatusTypeDef rc = HAL_UART_Transmit_IT(handle, tx, tx_length);
+
+    // manually implemented HAL_UART_Transmit_IT for tighter control of what it does
+    handle->pTxBuffPtr = tx;
+    handle->TxXferSize = tx_length;
+    handle->TxXferCount = tx_length;
+
+    if(handle->State == HAL_UART_STATE_BUSY_RX) {
+        handle->State = HAL_UART_STATE_BUSY_TX_RX;
+    } else {
+        handle->State = HAL_UART_STATE_BUSY_TX;
+    }
+
+    // if the TX register is empty, directly input the first transmit byte
+    if (__HAL_UART_GET_FLAG(handle, UART_FLAG_TXE)) {
+        handle->Instance->TDR = *handle->pTxBuffPtr++;
+        handle->TxXferCount--;
+    }
+    // chose either the tx reg empty or if last byte wait directly for tx complete
+    if (handle->TxXferCount != 0) {
+        handle->Instance->CR1 |= USART_CR1_TXEIE;
+    } else {
+        handle->Instance->CR1 |= USART_CR1_TCIE;
+    }
+
+    DEBUG_PRINTF("serial_tx_asynch UART%u: Tx: 0=(%u, %u) %x\n", obj->serial.module+1, tx_length, tx_width, HAL_UART_GetState(handle));
+
+    return tx_length;
+}
+
+void serial_rx_asynch(serial_t *obj, void *rx, size_t rx_length, uint8_t rx_width, uint32_t handler, uint32_t event, uint8_t char_match, DMAUsage hint)
+{
+    // TODO: DMA usage is currently ignored
+    (void) hint;
+
+    bool use_rx = (rx != NULL && rx_length > 0);
+    IRQn_Type irq_n = UartIRQs[obj->serial.module];
+
+    if (!use_rx || !irq_n)
+        return;
+
+    obj->rx_buff.buffer = rx;
+    obj->rx_buff.length = rx_length;
+    obj->rx_buff.pos    = 0;
+    obj->rx_buff.width  = rx_width;
+
+    obj->serial.event      = (obj->serial.event & ~SERIAL_EVENT_RX_MASK) | (event & SERIAL_EVENT_RX_MASK);
+    obj->serial.char_match = char_match;
+
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    // register the thunking handler
+    vIRQ_SetVector(irq_n, handler);
+    vIRQ_EnableIRQ(irq_n);
+
+    // HAL_StatusTypeDef rc = HAL_UART_Receive_IT(handle, rx, rx_length);
+
+    handle->pRxBuffPtr = rx;
+    handle->RxXferSize = rx_length;
+    handle->RxXferCount = rx_length;
+
+    if(handle->State == HAL_UART_STATE_BUSY_TX) {
+        handle->State = HAL_UART_STATE_BUSY_TX_RX;
+    } else {
+        handle->State = HAL_UART_STATE_BUSY_RX;
+    }
+
+    __HAL_UART_CLEAR_PEFLAG(handle);
+    handle->Instance->CR1 |= USART_CR1_RXNEIE | USART_CR1_PEIE;
+    handle->Instance->CR3 |= USART_CR3_EIE;
+
+    DEBUG_PRINTF("serial_rx_asynch UART%u: Rx: 0=(%u, %u, %u) %x\n", obj->serial.module+1, rx_length, rx_width, char_match, HAL_UART_GetState(handle));
+}
+
+int serial_irq_handler_asynch(serial_t *obj)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+
+    int status = handle->Instance->ISR;
+    int data = handle->Instance->RDR;
+    int event = 0;
+
+    if (status & USART_ISR_PE) {
+        event |= SERIAL_EVENT_RX_PARITY_ERROR;
+    }
+    if (status & (USART_ISR_NE | USART_ISR_FE)) {
+        event |= SERIAL_EVENT_RX_FRAMING_ERROR;
+    }
+    if (status & USART_ISR_ORE) {
+        event |= SERIAL_EVENT_RX_OVERRUN_ERROR;
+    }
+
+    if ((status & USART_ISR_TC) && (handle->State & 0x10) && !handle->TxXferCount) {
+        // transmission is finally complete
+        handle->Instance->CR1 &= ~USART_CR1_TCIE;
+        // set event tx complete
+        event |= SERIAL_EVENT_TX_COMPLETE;
+        // update handle state
+        if(handle->State == HAL_UART_STATE_BUSY_TX_RX) {
+            handle->State = HAL_UART_STATE_BUSY_RX;
+        } else {
+            handle->State = HAL_UART_STATE_READY;
+        }
+    }
+    else if ((status & USART_ISR_TXE) && handle->TxXferCount) {
+        // chose either the tx reg empty or if last byte wait directly for tx complete
+        if (--handle->TxXferCount == 0) {
+            handle->Instance->CR1 &= ~USART_CR1_TXEIE;
+            handle->Instance->CR1 |= USART_CR1_TCIE;
+        }
+        // copy new data into transmit register
+        handle->Instance->TDR = (uint8_t)*handle->pTxBuffPtr++;
+        obj->tx_buff.pos++;
+    }
+
+    if ((status & USART_ISR_RXNE) && handle->RxXferCount) {
+        // something arrived in the receive buffer
+        // copy into buffer
+        *handle->pRxBuffPtr++ = (uint8_t)data;
+        obj->rx_buff.pos++;
+        // check for character match only if enabled though!
+        if ((obj->serial.char_match != SERIAL_RESERVED_CHAR_MATCH) && ((uint8_t)data == obj->serial.char_match)) {
+            event |= SERIAL_EVENT_RX_CHARACTER_MATCH;
+        }
+        if (--handle->RxXferCount == 0) {
+            // last receive byte, disable all rx interrupts
+            handle->Instance->CR1 &= ~(USART_CR1_RXNEIE | USART_CR1_PEIE);
+            handle->Instance->CR3 &= ~USART_CR3_EIE;
+            // set event rx complete
+            event |= SERIAL_EVENT_RX_COMPLETE;
+            // update handle state
+            if(handle->State == HAL_UART_STATE_BUSY_TX_RX) {
+                handle->State = HAL_UART_STATE_BUSY_TX;
+            } else {
+                handle->State = HAL_UART_STATE_READY;
+            }
+        }
+    }
+
+    return (event & obj->serial.event);
+}
+
+void serial_rx_abort_asynch(serial_t *obj)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    // stop interrupts
+    handle->Instance->CR1 &= ~(USART_CR1_RXNEIE | USART_CR1_PEIE);
+    handle->Instance->CR3 &= ~USART_CR3_EIE;
+    // clear flags
+    __HAL_UART_CLEAR_PEFLAG(handle);
+    // reset states
+    handle->RxXferCount = 0;
+    // update handle state
+    if(handle->State == HAL_UART_STATE_BUSY_TX_RX) {
+        handle->State = HAL_UART_STATE_BUSY_TX;
+    } else {
+        handle->State = HAL_UART_STATE_READY;
+    }
+}
+
+void serial_tx_abort_asynch(serial_t *obj)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    // stop interrupts
+    handle->Instance->CR1 &= ~(USART_CR1_TCIE | USART_CR1_TXEIE);
+    // clear flags
+    __HAL_UART_CLEAR_PEFLAG(handle);
+    // reset states
+    handle->TxXferCount = 0;
+    // update handle state
+    if(handle->State == HAL_UART_STATE_BUSY_TX_RX) {
+        handle->State = HAL_UART_STATE_BUSY_RX;
+    } else {
+        handle->State = HAL_UART_STATE_READY;
+    }
+}
+
+uint8_t serial_tx_active(serial_t *obj)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    HAL_UART_StateTypeDef state = HAL_UART_GetState(handle);
+
+    switch(state) {
+        case HAL_UART_STATE_RESET:
+        case HAL_UART_STATE_READY:
+        case HAL_UART_STATE_ERROR:
+        case HAL_UART_STATE_TIMEOUT:
+        case HAL_UART_STATE_BUSY_RX:
+            return 0;
+        default:
+            return 1;
+    }
+}
+
+uint8_t serial_rx_active(serial_t *obj)
+{
+    UART_HandleTypeDef *handle = &UartHandle[obj->serial.module];
+    HAL_UART_StateTypeDef state = HAL_UART_GetState(handle);
+
+    switch(state) {
+        case HAL_UART_STATE_RESET:
+        case HAL_UART_STATE_READY:
+        case HAL_UART_STATE_ERROR:
+        case HAL_UART_STATE_TIMEOUT:
+        case HAL_UART_STATE_BUSY_TX:
+            return 0;
+        default:
+            return 1;
+    }
+}
+
 
 #endif
