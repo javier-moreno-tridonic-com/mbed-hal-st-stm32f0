@@ -442,6 +442,9 @@ void i2c_set_own_address(i2c_t *obj, uint32_t address)
     // Reset address bits
     tmpreg &= 0xFC00;
     // Set new address
+    // Disable OA1EN in order to change own address
+    I2cHandle.Instance->OAR1 &= ~ I2C_OAR1_OA1EN;
+
     tmpreg |= (uint16_t)((uint16_t)address & (uint16_t)0x00FE); // 7-bits
     // Store the new register value
     I2cHandle.Instance->OAR1 = tmpreg;
