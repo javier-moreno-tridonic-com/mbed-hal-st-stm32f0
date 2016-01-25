@@ -27,7 +27,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *******************************************************************************
  */
-#include "mbed-drivers/mbed_assert.h"
+#include "mbed_assert.h"
 #include "i2c_api.h"
 
 #if DEVICE_I2C
@@ -2800,6 +2800,84 @@ void i2c_abort_asynch(i2c_t *obj)
 {  
     i2c_reset(obj);  
 }
+
+#if DEVICE_I2CSLAVE
+uint32_t gevent=0;
+
+void dma_rx_cb(DMA_HandleTypeDef *hdma)
+{
+  gevent = I2C_EVENT_TRANSFER_COMPLETE; 
+}
+
+void dma_tx_cb(DMA_HandleTypeDef *hdma)
+{
+  gevent = I2C_EVENT_TRANSFER_COMPLETE; 
+}
+
+void i2cslave_transfer_asynch(i2c_t *obj, void *tx, size_t tx_length, void *rx, size_t rx_length, uint32_t address, uint32_t stop, uint32_t handler, uint32_t event, DMAUsage hint)
+{
+    // TODO: DMA usage is currently ignored by this way
+    (void) hint;  
+
+    // check which use-case we have  
+    int use_tx = (tx != NULL && tx_length > 0);  
+    int use_rx = (rx != NULL && rx_length > 0);  
+  
+		obj->tx_buff.buffer = tx;
+    obj->tx_buff.length = tx_length;  
+    obj->tx_buff.pos = 0;  
+    obj->tx_buff.width = 8;  
+  
+    obj->rx_buff.buffer = rx;  
+    obj->rx_buff.length = rx_length;  
+    obj->rx_buff.pos = 0;  
+    obj->rx_buff.width = 8;  
+  
+	  g_event[i2c_module_lookup(obj)] = event;  
+    g_address[i2c_module_lookup(obj)] = address;
+    g_stop_previous[i2c_module_lookup(obj)] = g_stop[i2c_module_lookup(obj)];
+    g_stop[i2c_module_lookup(obj)] = stop;  
+ 
+    /* NVIC configuration for DMA transfer complete interrupt (I2C_TX) */
+    NVIC_SetVector(I2C_DMATx_IRQs[i2c_module_lookup(obj)], handler);
+    HAL_NVIC_SetPriority(I2C_DMATx_IRQs[i2c_module_lookup(obj)], 0, 1);
+    HAL_NVIC_EnableIRQ(I2C_DMATx_IRQs[i2c_module_lookup(obj)]);
+      
+    /* NVIC configuration for DMA transfer complete interrupt (I2C_RX) */
+    NVIC_SetVector(I2C_DMARx_IRQs[i2c_module_lookup(obj)], handler);
+    HAL_NVIC_SetPriority(I2C_DMARx_IRQs[i2c_module_lookup(obj)], 0, 0);   
+    HAL_NVIC_EnableIRQ(I2C_DMARx_IRQs[i2c_module_lookup(obj)]);		
+  
+    I2C_HandleTypeDef *handle = &t_I2cHandle[i2c_module_lookup(obj)];
+    t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c.i2c);
+		
+    if (use_tx && use_rx) {  
+    } else if (use_tx) {
+        HAL_I2C_Slave_Transmit_DMA(handle, (uint8_t*)tx, tx_length); 
+    } else if (use_rx) {  
+        HAL_I2C_Slave_Receive_DMA(handle, (uint8_t*)rx, rx_length);  
+    }  
+}  
+
+uint32_t i2cslave_irq_handler_asynch(i2c_t *obj)  
+{  
+    I2C_HandleTypeDef *handle = &t_I2cHandle[i2c_module_lookup(obj)];
+    t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c.i2c);  
+  
+    int event = 0;  
+    
+    handle->hdmatx->XferCpltCallback = dma_tx_cb;
+    handle->hdmarx->XferCpltCallback = dma_rx_cb;
+    HAL_DMA_IRQHandler(handle->hdmarx);
+    HAL_DMA_IRQHandler(handle->hdmatx);
+    handle->State = HAL_I2C_STATE_READY;
+    event = gevent;
+    gevent=0;
+    return (event & g_event[i2c_module_lookup(obj)]);
+}  
+
+
+#endif // DEVICE_I2CSLAVE
 
 #endif //!DEVICE_I2C_ASYNCH_DMA
 
