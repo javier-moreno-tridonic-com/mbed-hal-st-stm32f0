@@ -126,23 +126,45 @@ void i2c_frequency(i2c_t *obj, int hz)
     int timeout;
     uint32_t tim;
 
+    // Update the SystemCoreClock variable
+    SystemCoreClockUpdate();
     // wait before init
     timeout = LONG_TIMEOUT;
     while ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_BUSY)) && (timeout-- != 0));
 
+    if(SystemCoreClock == 8000000)
+    {
     switch (hz) {
-		case 100000:
-			tim = 0x00201D2B; // Standard mode
-			break;
-		case 200000:
-			tim = 0x0010021E; // Fast mode
-			break;
-		case 400000:
-			tim = 0x0010020A; // Fast mode
-			break;
-		default:
-			tim = 0x00201D2B; // Standard mode as default
-			break;
+        default:
+        case 100000:
+            tim = 0x00201D2B; // Standard mode
+            break;
+        case 400000:
+            tim = 0x0010020A; // Fast mode
+            break;
+        }
+    }else if(SystemCoreClock == 32000000)
+    {
+        switch (hz) {
+            default:
+            case 100000:
+                tim = 0x20302E37; // Standard mode
+                break;
+            case 400000:
+                tim = 0x00601B28; // Fast mode
+                break;
+        }
+    }else //(SystemCoreClock == 48000000)
+    {
+        switch (hz) {
+            default:
+            case 100000:
+                tim = 0x10805E89; // Standard mode
+                break;
+            case 400000:
+                tim = 0x00901850; // Fast mode
+                break;
+        }
     }
 
     // I2C configuration
