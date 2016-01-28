@@ -35,14 +35,14 @@ static void lp_handler(void)
 void lp_ticker_init(void) {
     if (!lp_ticker_inited) {
         lp_ticker_inited = 1;
-        __TIM2_CLK_ENABLE();
-        __TIM2_FORCE_RESET();
-        __TIM2_RELEASE_RESET();
+        __TIM14_CLK_ENABLE();
+        __TIM14_FORCE_RESET();
+        __TIM14_RELEASE_RESET();
 
         // Update the SystemCoreClock variable
         SystemCoreClockUpdate();
 
-        /* Timer2 is connected to APB1 which has a max frequency restriction and might therefore
+        /* Timer14 is connected to APB1 which has a max frequency restriction and might therefore
          * not run at CPU speeds.
          *
          * ATTENTION: Since the timer only has a 16bit prescaler a 1ms tick resolution would mean
@@ -55,22 +55,22 @@ void lp_ticker_init(void) {
         uint32_t PclkFreq;
         // Note: PclkFreq contains here the Latency (not used after)
         HAL_RCC_GetClockConfig(&RCC_ClkInitStruct, &PclkFreq);
-        // Get TIM1 clock value
+        // Get PCLK clock value
         PclkFreq = HAL_RCC_GetPCLK1Freq();
         // TIMxCLK = PCLKx when the APB prescaler = 1 else TIMxCLK = 2 * PCLKx
         if (RCC_ClkInitStruct.APB1CLKDivider != RCC_HCLK_DIV1) {
             PclkFreq *= 2;
         }
-        TimMasterHandle.Instance               = TIM2;
-        TimMasterHandle.Init.Period            = 0xFFFFFFFF;
+        TimMasterHandle.Instance               = TIM14;
+        TimMasterHandle.Init.Period            = 0xFFFF;
         TimMasterHandle.Init.Prescaler         = (uint32_t)(PclkFreq / 2000) - 1; // 0.5 ms tick
         TimMasterHandle.Init.ClockDivision     = 0;
         TimMasterHandle.Init.CounterMode       = TIM_COUNTERMODE_UP;
         TimMasterHandle.Init.RepetitionCounter = 0;
         HAL_TIM_OC_Init(&TimMasterHandle);
 
-        vIRQ_SetVector(TIM2_IRQn, (uint32_t)lp_handler);
-        vIRQ_EnableIRQ(TIM2_IRQn);
+        vIRQ_SetVector(TIM14_IRQn, (uint32_t)lp_handler);
+        vIRQ_EnableIRQ(TIM14_IRQn);
 
         HAL_TIM_OC_Start(&TimMasterHandle, TIM_CHANNEL_1);
     }
@@ -80,7 +80,7 @@ uint32_t lp_ticker_read() {
     if (!lp_ticker_inited) {
         lp_ticker_init();
     }
-    return TIM2->CNT;
+    return TIM14->CNT;
 }
 
 uint32_t lp_ticker_get_overflows_counter(void) {
@@ -88,7 +88,7 @@ uint32_t lp_ticker_get_overflows_counter(void) {
 }
 
 uint32_t lp_ticker_get_compare_match(void) {
-    return TIM2->CCMR1;
+    return TIM14->CCMR1;
 }
 
 void lp_ticker_set_interrupt(uint32_t now, uint32_t time) {
