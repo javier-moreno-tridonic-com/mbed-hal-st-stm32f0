@@ -40,7 +40,7 @@ void mbed_enter_sleep(sleep_t *obj)
 	//jagomo: looks like we lack a TIM5 for sleep.c
 #warning "jagomo: TIM5 -> TIM2"
     //obj->TimMasterHandle.Instance = TIM5;
-    obj->TimMasterHandle.Instance = TIM2;
+    obj->TimMasterHandle.Instance = TIM14;
 
     // Disable HAL tick interrupt
     __HAL_TIM_DISABLE_IT(&obj->TimMasterHandle, TIM_IT_CC2);
