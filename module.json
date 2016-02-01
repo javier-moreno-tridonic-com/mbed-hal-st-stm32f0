@@ -1,6 +1,6 @@
 {
   "name": "mbed-hal-st-stm32f0",
-  "version": "0.0.0",
+  "version": "0.0.0-tri-0.0.2",
   "description": "mbed HAL module for STM32F0 microcontrollers",
   "keywords": [],
   "author": "Javier Gomez Moreno <javier.moreno@tridonic.com>",
@@ -19,12 +19,12 @@
   ],
   "dependencies": {
     "uvisor-lib": "^1.0.0",
-    "mbed-hal-st-stm32cubef0": "tridonic-com/mbed-hal-st-stm32cubef0#tridonic",
+    "mbed-hal-st-stm32cubef0": "tridonic-com/mbed-hal-st-stm32cubef0#0.0.0-tri-0.0.2",
     "mbed-hal": "tridonic-com/mbed-hal#tridonic"
   },
   "targetDependencies": {
     "stm32f091rc": {
-      "mbed-hal-st-stm32f091rc": "tridonic-com/mbed-hal-st-stm32f091rc#tridonic"
+      "mbed-hal-st-stm32f091rc": "tridonic-com/mbed-hal-st-stm32f091rc#0.0.0-tri-0.0.2"
     }
   }
 }
