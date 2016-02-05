@@ -693,11 +693,11 @@ void HAL_I2C_MspInit(I2C_HandleTypeDef *hi2c)
 		__HAL_LINKDMA(hi2c,hdmatx,hdma_i2c1_tx);
 
 		/* DMA interrupt init */
-		HAL_NVIC_SetPriority(DMA1_Ch2_3_DMA2_Ch1_2_IRQn, 0, 0);
+		HAL_NVIC_SetPriority(DMA1_Ch2_3_DMA2_Ch1_2_IRQn, 1, 0);
 		HAL_NVIC_EnableIRQ(DMA1_Ch2_3_DMA2_Ch1_2_IRQn);
 
 		/* I2C interrupt init */
-		HAL_NVIC_SetPriority(I2C1_IRQn, 0, 0);
+		HAL_NVIC_SetPriority(I2C1_IRQn, 1, 0);
 		HAL_NVIC_EnableIRQ(I2C1_IRQn);
 	}
 }
@@ -742,7 +742,17 @@ void I2C1_IRQHandler(void)
 
 	if (I2cHandle.Instance->ISR & (I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR)) {
 		HAL_I2C_ER_IRQHandler(&I2cHandle);
-	} else {
+	}
+//	else if((I2cHandle.State == HAL_I2C_STATE_MASTER_BUSY_TX) ||
+//			(I2cHandle.State == HAL_I2C_STATE_MASTER_BUSY_RX))
+//	{
+//		if (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_STOPF) == SET)
+//		{
+//			/* Clear STOP Flag */
+//			__HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_STOPF);
+//		}
+//	}
+	else {
 		/* I2C Slave address match  ---------------------------------------------------*/
 		if ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_ADDR) == SET) &&
 		   (__HAL_I2C_GET_IT_SOURCE(&I2cHandle, I2C_IT_ADDRI) == SET))
