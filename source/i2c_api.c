@@ -743,15 +743,6 @@ void I2C1_IRQHandler(void)
 	if (I2cHandle.Instance->ISR & (I2C_FLAG_BERR | I2C_FLAG_ARLO | I2C_FLAG_OVR)) {
 		HAL_I2C_ER_IRQHandler(&I2cHandle);
 	}
-//	else if((I2cHandle.State == HAL_I2C_STATE_MASTER_BUSY_TX) ||
-//			(I2cHandle.State == HAL_I2C_STATE_MASTER_BUSY_RX))
-//	{
-//		if (__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_STOPF) == SET)
-//		{
-//			/* Clear STOP Flag */
-//			__HAL_I2C_CLEAR_FLAG(&I2cHandle, I2C_FLAG_STOPF);
-//		}
-//	}
 	else {
 		/* I2C Slave address match  ---------------------------------------------------*/
 		if ((__HAL_I2C_GET_FLAG(&I2cHandle, I2C_FLAG_ADDR) == SET) &&
