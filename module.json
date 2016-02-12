@@ -19,7 +19,7 @@
   ],
   "dependencies": {
     "uvisor-lib": "^1.0.0",
-    "mbed-hal-st-stm32cubef0": "tridonic-com/mbed-hal-st-stm32cubef0#0.0.0-tri-0.0.2",
+    "mbed-hal-st-stm32cubef0": "tridonic-com/mbed-hal-st-stm32cubef0#release-green2",
     "mbed-hal": "tridonic-com/mbed-hal#tridonic"
   },
   "targetDependencies": {
