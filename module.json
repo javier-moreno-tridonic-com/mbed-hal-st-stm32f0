@@ -24,7 +24,7 @@
   },
   "targetDependencies": {
     "stm32f091rc": {
-      "mbed-hal-st-stm32f091rc": "tridonic-com/mbed-hal-st-stm32f091rc#0.0.0-tri-0.0.2"
+      "mbed-hal-st-stm32f091rc": "tridonic-com/mbed-hal-st-stm32f091rc#0.0.0-tri-0.0.5"
     }
   }
 }
