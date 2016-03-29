@@ -27,7 +27,7 @@
     "mbed-hal": "*"
   },
   "targetDependencies": {
-    "stm32f091rc": {
+    "stm32f091rc-no-inherit": {
       "mbed-hal-st-stm32f091rc": "*"
     }
   }
