@@ -50,8 +50,10 @@ void analogin_init(analogin_t *obj, PinName pin) {
     MBED_ASSERT(function != (uint32_t)NC);
     obj->channel = STM_PIN_CHANNEL(function);
 
-    // Configure GPIO
-    pinmap_pinout(pin, PinMap_ADC);
+    // Configure GPIO (not for internal channels)
+    if ((obj->channel != 16) && (obj->channel != 17) && (obj->channel != 18)) {
+        pinmap_pinout(pin, PinMap_ADC);
+    }
 
     // Save pin number for the read function
     obj->pin = pin;
@@ -78,9 +80,11 @@ void analogin_init(analogin_t *obj, PinName pin) {
         AdcHandle.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_NONE;
         AdcHandle.Init.DMAContinuousRequests = DISABLE;
         AdcHandle.Init.Overrun               = OVR_DATA_OVERWRITTEN;
+        
         if (HAL_ADC_Init(&AdcHandle) != HAL_OK) {
             error("Cannot initialize ADC");
         }
+        
         // Run the ADC calibration
         if (HAL_ADCEx_Calibration_Start(&AdcHandle) != HAL_OK) {
             error("Cannot Start ADC_Calibration");
@@ -149,6 +153,15 @@ static inline uint16_t adc_read(analogin_t *obj) {
             break;
         case 15:
             sConfig.Channel = ADC_CHANNEL_15;
+            break;
+        case 16: // TEMP SENSOR
+            sConfig.Channel = ADC_CHANNEL_16;
+            break;
+        case 17: // VREF
+            sConfig.Channel = ADC_CHANNEL_17;
+            break;
+        case 18: // VBAT
+            sConfig.Channel = ADC_CHANNEL_18;
             break;
         default:
             return 0;

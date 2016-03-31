@@ -84,3 +84,7 @@
     PF_0  = 0x50,
     PF_1  = 0x51,
     PF_11 = 0x5B,
+
+    ADC_TEMP = 0xF0,
+    ADC_VREF = 0xF1,
+    ADC_VBAT = 0xF2,
