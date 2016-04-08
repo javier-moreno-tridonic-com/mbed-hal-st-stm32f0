@@ -33,7 +33,7 @@
 #if DEVICE_I2C
 
 #ifndef USE_STM32F0XX_HAL_I2C__FIX
-#error Please use stm32f4xx_hal_i2c__FIX.c
+#error Please use stm32f0xx_hal_i2c__FIX.c
 #endif
 
 #include "cmsis.h"
@@ -536,7 +536,6 @@ void i2c_slave_mode(i2c_t *obj, int enable_slave) {
 
 int i2c_slave_receive(i2c_t *obj) {
 #if !DEVICE_I2C_ASYNCH
-//    I2cHandle.Instance = (I2C_TypeDef *)(obj->i2c);
     I2C_HandleTypeDef *handle = &t_I2cHandle[i2c_module_lookup(obj)];
     t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c);
 #else
@@ -596,8 +595,6 @@ void i2c_transfer_asynch(i2c_t *obj, void *tx, size_t tx_length, void *rx, size_
     // TODO: DMA usage is currently ignored  
     (void) hint;  
 
-  	//obj->i2c.generate_stop = stop;
-  
     // check which use-case we have  
     int use_tx = (tx != NULL && tx_length > 0);  
     int use_rx = (rx != NULL && rx_length > 0);  
@@ -612,9 +609,7 @@ void i2c_transfer_asynch(i2c_t *obj, void *tx, size_t tx_length, void *rx, size_
     obj->rx_buff.pos = 0;  
     obj->rx_buff.width = 8;  
   
-   // obj->i2c.event = event;  
-    //obj->i2c.address = address;  
-	  g_event[i2c_module_lookup(obj)] = event;  
+    g_event[i2c_module_lookup(obj)] = event;  
     g_address[i2c_module_lookup(obj)] = address;
     g_stop_previous[i2c_module_lookup(obj)] = g_stop[i2c_module_lookup(obj)];
     g_stop[i2c_module_lookup(obj)] = stop; 
@@ -764,11 +759,104 @@ void i2c_abort_asynch(i2c_t *obj)
 }
 
 #if DEVICE_I2CSLAVE
+uint32_t gevent=0;
+uint32_t ghandler=0;
+
+void HAL_I2C_SlaveTxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  gevent = I2C_EVENT_TRANSFER_COMPLETE; 
+}
+
+void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
+{
+  gevent = I2C_EVENT_TRANSFER_COMPLETE; 
+}
+
+void i2c1slave_irq_handler(void)
+{
+	I2C_HandleTypeDef *handle = &t_I2cHandle[0];
+		
+	HAL_I2C_EV_IRQHandler(handle,0);
+	HAL_I2C_ER_IRQHandler(handle);
+	if(handle->XferCount == 0) {
+		NVIC_SetVector(I2C1_IRQn, ghandler);
+	}
+}
+
+void i2c2slave_irq_handler(void)
+{
+	I2C_HandleTypeDef *handle = &t_I2cHandle[1];
+
+	HAL_I2C_EV_IRQHandler(handle,0);
+	HAL_I2C_ER_IRQHandler(handle);
+  if(handle->XferCount == 0) {
+		NVIC_SetVector(I2C2_IRQn, ghandler);
+	}
+}
+
+uint32_t t_i2cslave_irq_handler[]={(uint32_t)i2c1slave_irq_handler, (uint32_t)i2c2slave_irq_handler};
+
 void i2cslave_transfer_asynch(i2c_t *obj, void *tx, size_t tx_length, void *rx, size_t rx_length, uint32_t address, uint32_t stop, uint32_t handler, uint32_t event, DMAUsage hint) {
+
+	  // TODO: DMA usage is currently ignored by this way
+    (void) hint;  
+
+    // check which use-case we have  
+    int use_tx = (tx != NULL && tx_length > 0);  
+    int use_rx = (rx != NULL && rx_length > 0);  
+  
+		obj->tx_buff.buffer = tx;
+    obj->tx_buff.length = tx_length;  
+    obj->tx_buff.pos = 0;  
+    obj->tx_buff.width = 8;  
+  
+    obj->rx_buff.buffer = rx;  
+    obj->rx_buff.length = rx_length;  
+    obj->rx_buff.pos = 0;  
+    obj->rx_buff.width = 8;  
+  
+    g_event[i2c_module_lookup(obj)] = event;  
+    g_address[i2c_module_lookup(obj)] = address;
+    g_stop_previous[i2c_module_lookup(obj)] = g_stop[i2c_module_lookup(obj)];
+    g_stop[i2c_module_lookup(obj)] = stop;  
+    ghandler=handler;
+ 
+    // register handler for event and error 
+    IRQn_Type event_irq_n = I2cEventIRQs[i2c_module_lookup(obj)];  
+    IRQn_Type error_irq_n = I2cErrorIRQs[i2c_module_lookup(obj)]; 
+    NVIC_SetVector(event_irq_n, (uint32_t)t_i2cslave_irq_handler[i2c_module_lookup(obj)]);
+    NVIC_EnableIRQ(event_irq_n);
+  
+    I2C_HandleTypeDef *handle = &t_I2cHandle[i2c_module_lookup(obj)];
+    t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c.i2c);
+		
+    if (use_tx && use_rx) {  
+    } else if (use_tx) {
+			  __HAL_I2C_CLEAR_FLAG(handle, I2C_FLAG_AF | I2C_FLAG_STOPF);
+        HAL_I2C_Slave_Transmit_IT(handle, (uint8_t*)tx, tx_length); 
+    } else if (use_rx) {  
+        HAL_I2C_Slave_Receive_IT(handle, (uint8_t*)rx, rx_length);  
+    }  
 }
 
 uint32_t i2cslave_irq_handler_asynch(i2c_t *obj) {
-	return 1;
+    I2C_HandleTypeDef *handle = &t_I2cHandle[i2c_module_lookup(obj)];
+    t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c.i2c);  
+  
+    int event = 0;  
+    
+    HAL_I2C_EV_IRQHandler(handle,0);
+    HAL_I2C_ER_IRQHandler(handle);
+		
+		if(handle->State == HAL_I2C_STATE_SLAVE_BUSY_TX){
+			__HAL_I2C_DISABLE_IT(handle, I2C_IT_ERRI | I2C_IT_TCI | I2C_IT_STOPI | I2C_IT_NACKI | I2C_IT_ADDRI | I2C_IT_RXI | I2C_IT_TXI );
+			gevent = I2C_EVENT_TRANSFER_COMPLETE;
+		}
+		
+    handle->State = HAL_I2C_STATE_READY;
+    event = gevent;
+    gevent=0;
+    return (event & g_event[i2c_module_lookup(obj)]);
 }
 
 #endif //DEVICE_I2CSLAVE
@@ -1336,7 +1424,7 @@ void i2c_transfer_asynch(i2c_t *obj, void *tx, size_t tx_length, void *rx, size_
     IRQn_Type error_irq_n = I2cErrorIRQs[i2c_module_lookup(obj)]; 
     NVIC_SetVector(error_irq_n, handler);
     NVIC_EnableIRQ(error_irq_n);
-    /*##-5- Configure the NVIC for DMA #########################################*/
+
     /* NVIC configuration for DMA transfer complete interrupt (I2C_TX) */
     NVIC_SetVector(I2C_DMATx_IRQs[i2c_module_lookup(obj)], handler);
     HAL_NVIC_SetPriority(I2C_DMATx_IRQs[i2c_module_lookup(obj)], 0, 1);
