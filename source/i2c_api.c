@@ -54,30 +54,28 @@
 
 //I2C_HandleTypeDef I2cHandle;
 #if defined(I2C2_Base)
-  #define MODULE_SIZE_I2C 2
   #if DEVICE_I2C_ASYNCH
-static const IRQn_Type I2cEventIRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2cEventIRQs[MODULES_SIZE_I2C] = {  
     I2C1_IRQn,  
     I2C2_IRQn,  
 };  
-static const IRQn_Type I2cErrorIRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2cErrorIRQs[MODULES_SIZE_I2C] = {  
     I2C1_IRQn,  
     I2C2_IRQn,  
 };
   #endif
 #else
-  #define MODULE_SIZE_I2C 1
   #if DEVICE_I2C_ASYNCH
-static const IRQn_Type I2cEventIRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2cEventIRQs[MODULES_SIZE_I2C] = {  
     I2C1_IRQn,  
 };  
-static const IRQn_Type I2cErrorIRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2cErrorIRQs[MODULES_SIZE_I2C] = {  
     I2C1_IRQn,  
 };
   #endif
 #endif
 
-I2C_HandleTypeDef t_I2cHandle[MODULE_SIZE_I2C];
+I2C_HandleTypeDef t_I2cHandle[MODULES_SIZE_I2C];
 
 int i2c1_inited = 0;
 #if defined(I2C2_BASE)
@@ -583,10 +581,10 @@ int i2c_slave_write(i2c_t *obj, const char *data, int length) {
 
 #if DEVICE_I2C_ASYNCH
 
-uint32_t g_event[MODULE_SIZE_I2C];
-uint32_t g_address[MODULE_SIZE_I2C];
-uint32_t g_stop[MODULE_SIZE_I2C];
-uint32_t g_stop_previous[MODULE_SIZE_I2C];
+uint32_t g_event[MODULES_SIZE_I2C];
+uint32_t g_address[MODULES_SIZE_I2C];
+uint32_t g_stop[MODULES_SIZE_I2C];
+uint32_t g_stop_previous[MODULES_SIZE_I2C];
 
 #if !DEVICE_I2C_ASYNCH_DMA
 
@@ -864,19 +862,19 @@ uint32_t i2cslave_irq_handler_asynch(i2c_t *obj) {
 #else //DEVICE_I2C_ASYNCH_DMA
 
 #if defined(I2C2_Base)
-static const IRQn_Type I2C_DMATx_IRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2C_DMATx_IRQs[MODULES_SIZE_I2C] = {  
     DMA1_Ch2_3_DMA2_Ch1_2_IRQn,  
     DMA1_Ch4_7_DMA2_Ch3_5_IRQn,  
 };
-static const IRQn_Type I2C_DMARx_IRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2C_DMARx_IRQs[MODULES_SIZE_I2C] = {  
     DMA1_Ch2_3_DMA2_Ch1_2_IRQn,  
     DMA1_Ch4_7_DMA2_Ch3_5_IRQn,  
 };
 #else
-static const IRQn_Type I2C_DMATx_IRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2C_DMATx_IRQs[MODULES_SIZE_I2C] = {  
     DMA1_Ch2_3_DMA2_Ch1_2_IRQn,  
 };
-static const IRQn_Type I2C_DMARx_IRQs[MODULE_SIZE_I2C] = {  
+static const IRQn_Type I2C_DMARx_IRQs[MODULES_SIZE_I2C] = {  
     DMA1_Ch2_3_DMA2_Ch1_2_IRQn,  
 };
 #endif
