@@ -1,6 +1,6 @@
 /* mbed Microcontroller Library
  *******************************************************************************
- * Copyright (c) 2015, STMicroelectronics
+ * Copyright (c) 2014, STMicroelectronics
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,49 +27,57 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *******************************************************************************
  */
-#include "mbed-drivers/mbed_assert.h"
-#include "gpio_api.h"
-#include "pinmap.h"
-#include "mbed-drivers/mbed_error.h"
+#ifndef MBED_PINDEFS_H
+#define MBED_PINDEFS_H
 
-extern uint32_t Set_GPIO_Clock(uint32_t port_idx);
+#include "cmsis.h"
 
-uint32_t gpio_set(PinName pin) {
-    MBED_ASSERT(pin != (PinName)NC);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    pin_function(pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
+// See stm32f4xx_hal_gpio.h and stm32f4xx_hal_gpio_ex.h for values of MODE, PUPD and AFNUM
+#define STM_PIN_DATA(MODE, PUPD, AFNUM)  ((int)(((AFNUM) << 7) | ((PUPD) << 4) | ((MODE) << 0)))
+#define STM_PIN_DATA_EXT(MODE, PUPD, AFNUM, CHANNEL, INVERTED)  ((int)(((INVERTED & 0x01) << 16) | ((CHANNEL & 0x1F) << 11) | ((AFNUM & 0x0F) << 7) | ((PUPD & 0x07) << 4) | ((MODE & 0x0F) << 0)))
+#define STM_PIN_MODE(X)   (((X) >> 0) & 0x0F)
+#define STM_PIN_PUPD(X)   (((X) >> 4) & 0x07)
+#define STM_PIN_AFNUM(X)  (((X) >> 7) & 0x0F)
+#define STM_PIN_CHANNEL(X)  (((X) >> 11) & 0x1F)
+#define STM_PIN_INVERTED(X) (((X) >> 16) & 0x01)
+#define STM_MODE_INPUT              (0)
+#define STM_MODE_OUTPUT_PP          (1)
+#define STM_MODE_OUTPUT_OD          (2)
+#define STM_MODE_AF_PP              (3)
+#define STM_MODE_AF_OD              (4)
+#define STM_MODE_ANALOG             (5)
+#define STM_MODE_IT_RISING          (6)
+#define STM_MODE_IT_FALLING         (7)
+#define STM_MODE_IT_RISING_FALLING  (8)
+#define STM_MODE_EVT_RISING         (9)
+#define STM_MODE_EVT_FALLING        (10)
+#define STM_MODE_EVT_RISING_FALLING (11)
+#define STM_MODE_IT_EVT_RESET       (12)
 
-    return (uint32_t)(1 << ((uint32_t)pin & 0xF)); // Return the pin mask
+// High nibble = port number (0=A, 1=B, 2=C, 3=D, 4=E, 5=F, 6=G, 7=H)
+// Low nibble  = pin number
+#define STM_PORT(X) (((uint32_t)(X) >> 4) & 0xF)
+#define STM_PIN(X)  ((uint32_t)(X) & 0xF)
+
+typedef enum {
+    PIN_INPUT,
+    PIN_OUTPUT
+} PinDirection;
+
+typedef enum {
+    PullNone  = 0,
+    PullUp    = 1,
+    PullDown  = 2,
+    OpenDrain = 3,
+    PullDefault = PullNone
+} PinMode;
+
+#ifdef __cplusplus
 }
+#endif
 
-void gpio_init(gpio_t *obj, PinName pin) {
-    obj->pin = pin;
-    if (pin == (PinName)NC) {
-        return;
-    }
-
-    uint32_t port_index = STM_PORT(pin);
-
-    // Enable GPIO clock
-    uint32_t gpio_add = Set_GPIO_Clock(port_index);
-    GPIO_TypeDef *gpio = (GPIO_TypeDef *)gpio_add;
-
-    // Fill GPIO object structure for future use
-    obj->mask    = gpio_set(pin);
-    obj->reg_in  = &gpio->IDR;
-    obj->reg_set = &gpio->BSRR;
-    obj->reg_clr = &gpio->BRR;
-}
-
-void gpio_mode(gpio_t *obj, PinMode mode) {
-    pin_mode(obj->pin, mode);
-}
-
-void gpio_dir(gpio_t *obj, PinDirection direction) {
-    MBED_ASSERT(obj->pin != (PinName)NC);
-    if (direction == PIN_OUTPUT) {
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
-    } else { // PIN_INPUT
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
-    }
-}
+#endif //MBED_PINDEFS_H

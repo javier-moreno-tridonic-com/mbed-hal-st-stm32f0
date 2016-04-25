@@ -1,5 +1,5 @@
 /* mbed Microcontroller Library
- * Copyright (c) 2014, STMicroelectronics
+ * Copyright (c) 2015, STMicroelectronics
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -25,22 +25,22 @@
  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "mbed_assert.h"
+#include "mbed-drivers/mbed_assert.h"
 #include "analogin_api.h"
 
 #if DEVICE_ANALOGIN
 
-#include "wait_api.h"
+#include "mbed-drivers/wait_api.h"
 #include "cmsis.h"
 #include "pinmap.h"
 #include "PeripheralPins.h"
+#include "mbed-drivers/mbed_error.h"
 
 ADC_HandleTypeDef AdcHandle;
 
 int adc_inited = 0;
 
-void analogin_init(analogin_t *obj, PinName pin)
-{
+void analogin_init(analogin_t *obj, PinName pin) {
     // Get the peripheral name from the pin and assign it to the object
     obj->adc = (ADCName)pinmap_peripheral(pin, PinMap_ADC);
     MBED_ASSERT(obj->adc != (ADCName)NC);
@@ -50,8 +50,10 @@ void analogin_init(analogin_t *obj, PinName pin)
     MBED_ASSERT(function != (uint32_t)NC);
     obj->channel = STM_PIN_CHANNEL(function);
 
-    // Configure GPIO
-    pinmap_pinout(pin, PinMap_ADC);
+    // Configure GPIO (not for internal channels)
+    if ((obj->channel != 16) && (obj->channel != 17) && (obj->channel != 18)) {
+        pinmap_pinout(pin, PinMap_ADC);
+    }
 
     // Save pin number for the read function
     obj->pin = pin;
@@ -62,40 +64,60 @@ void analogin_init(analogin_t *obj, PinName pin)
 
         // Enable ADC clock
         __ADC1_CLK_ENABLE();
-#warning "jagomo: commented inexistent members of ADC_InitTypeDef"
+
         // Configure ADC
         AdcHandle.Instance = (ADC_TypeDef *)(obj->adc);
-        AdcHandle.Init.ClockPrescaler        = ADC_CLOCKPRESCALER_PCLK_DIV2;
-        AdcHandle.Init.Resolution            = ADC_RESOLUTION_12B;
+#warning "Ivan Adzic: merge from v0.3.1, should be reviewed!"
+        //AdcHandle.Init.ClockPrescaler        = ADC_CLOCKPRESCALER_PCLK_DIV2;
+        AdcHandle.Init.ClockPrescaler        = ADC_CLOCK_SYNC_PCLK_DIV4;
+        AdcHandle.Init.Resolution            = ADC_RESOLUTION12b;
+        AdcHandle.Init.DataAlign             = ADC_DATAALIGN_RIGHT;
         AdcHandle.Init.ScanConvMode          = DISABLE;
+        AdcHandle.Init.EOCSelection          = EOC_SINGLE_CONV;
+        AdcHandle.Init.LowPowerAutoWait      = DISABLE;
+        AdcHandle.Init.LowPowerAutoPowerOff  = DISABLE;
         AdcHandle.Init.ContinuousConvMode    = DISABLE;
         AdcHandle.Init.DiscontinuousConvMode = DISABLE;
-        //AdcHandle.Init.NbrOfDiscConversion   = 0;
-        AdcHandle.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_NONE;
 #warning "jagomo: ADC_EXTERNALTRIGCONV_T1_CC1 -> ADC1_2_EXTERNALTRIG_T1_TRGO"
         //AdcHandle.Init.ExternalTrigConv      = ADC_EXTERNALTRIGCONV_T1_CC1;
-        AdcHandle.Init.ExternalTrigConv      = ADC1_2_EXTERNALTRIG_T1_TRGO;
-        AdcHandle.Init.DataAlign             = ADC_DATAALIGN_RIGHT;
-        //AdcHandle.Init.NbrOfConversion       = 1;
+#warning "Ivan Adzic: merge from v0.3.1, should be reviewed!"
+        //AdcHandle.Init.ExternalTrigConv      = ADC1_2_EXTERNALTRIG_T1_TRGO;
+        AdcHandle.Init.ExternalTrigConv      = ADC_SOFTWARE_START;
+        AdcHandle.Init.ExternalTrigConvEdge  = ADC_EXTERNALTRIGCONVEDGE_NONE;
         AdcHandle.Init.DMAContinuousRequests = DISABLE;
-        AdcHandle.Init.EOCSelection          = DISABLE;
-        HAL_ADC_Init(&AdcHandle);
+        AdcHandle.Init.Overrun               = OVR_DATA_OVERWRITTEN;
+#warning "Ivan Adzic: merge from v0.3.1, should be reviewed!"
+        //AdcHandle.Init.EOCSelection          = DISABLE;
+
+        if (HAL_ADC_Init(&AdcHandle) != HAL_OK) {
+            error("Cannot initialize ADC");
+        }
+        
+        // Run the ADC calibration
+        if (HAL_ADCEx_Calibration_Start(&AdcHandle) != HAL_OK) {
+            error("Cannot Start ADC_Calibration");
+        }
     }
 }
 
-static inline uint16_t adc_read(analogin_t *obj)
-{
+static inline uint16_t adc_read(analogin_t *obj) {
     ADC_ChannelConfTypeDef sConfig;
 
     AdcHandle.Instance = (ADC_TypeDef *)(obj->adc);
 
     // Configure ADC channel
-    sConfig.Rank         = 1;
+#warning "Ivan Adzic: merge from v0.3.1, should be reviewed!"
+    //sConfig.Rank         = 1;
+    sConfig.Rank         = ADC_RANK_CHANNEL_NUMBER;
 #warning "jagomo: ADC_SAMPLETIME_3CYCLES -> ADC_SAMPLETIME_1CYCLE_5"
     //sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
-    sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
-#warning "jagomo: sConfig.Offset       = 0; removed"
-    //sConfig.Offset       = 0;
+#warning "Ivan Adzic: merge from v0.3.1, should be reviewed!"
+    //sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
+#if defined (TARGET_STM32F091RC)
+    sConfig.SamplingTime = ADC_SAMPLETIME_13CYCLES_5;
+#else
+    sConfig.SamplingTime = ADC_SAMPLETIME_7CYCLES_5;
+#endif
 
     switch (obj->channel) {
         case 0:
@@ -146,9 +168,21 @@ static inline uint16_t adc_read(analogin_t *obj)
         case 15:
             sConfig.Channel = ADC_CHANNEL_15;
             break;
+        case 16: // TEMP SENSOR
+            sConfig.Channel = ADC_CHANNEL_16;
+            break;
+        case 17: // VREF
+            sConfig.Channel = ADC_CHANNEL_17;
+            break;
+        case 18: // VBAT
+            sConfig.Channel = ADC_CHANNEL_18;
+            break;
         default:
             return 0;
     }
+
+    // Clear all channels as it is not done in HAL_ADC_ConfigChannel()
+    AdcHandle.Instance->CHSELR = 0;
 
     HAL_ADC_ConfigChannel(&AdcHandle, &sConfig);
 
@@ -162,16 +196,14 @@ static inline uint16_t adc_read(analogin_t *obj)
     }
 }
 
-uint16_t analogin_read_u16(analogin_t *obj)
-{
+uint16_t analogin_read_u16(analogin_t *obj) {
     uint16_t value = adc_read(obj);
     // 12-bit to 16-bit conversion
     value = ((value << 4) & (uint16_t)0xFFF0) | ((value >> 8) & (uint16_t)0x000F);
     return value;
 }
 
-float analogin_read(analogin_t *obj)
-{
+float analogin_read(analogin_t *obj) {
     uint16_t value = adc_read(obj);
     return (float)value * (1.0f / (float)0xFFF); // 12 bits range
 }

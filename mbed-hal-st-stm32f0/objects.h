@@ -1,6 +1,6 @@
 /* mbed Microcontroller Library
  *******************************************************************************
- * Copyright (c) 2015, STMicroelectronics
+ * Copyright (c) 2014, STMicroelectronics
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,49 +27,87 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *******************************************************************************
  */
-#include "mbed-drivers/mbed_assert.h"
-#include "gpio_api.h"
-#include "pinmap.h"
-#include "mbed-drivers/mbed_error.h"
+#ifndef MBED_OBJECTS_H
+#define MBED_OBJECTS_H
 
-extern uint32_t Set_GPIO_Clock(uint32_t port_idx);
+#include "cmsis.h"
+#include "PortNames.h"
+#include "PeripheralNames.h"
+#include "PinNames.h"
+#include "target_config.h"
 
-uint32_t gpio_set(PinName pin) {
-    MBED_ASSERT(pin != (PinName)NC);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    pin_function(pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
+struct gpio_irq_s {
+    IRQn_Type irq_n;
+    uint32_t irq_index;
+    uint32_t event;
+    PinName pin;
+};
 
-    return (uint32_t)(1 << ((uint32_t)pin & 0xF)); // Return the pin mask
+struct port_s {
+    PortName port;
+    uint32_t mask;
+    PinDirection direction;
+    __IO uint32_t *reg_in;
+    __IO uint32_t *reg_out;
+};
+
+struct analogin_s {
+    ADCName adc;
+    PinName pin;
+    uint8_t channel;
+};
+
+struct dac_s {
+    DACName dac;
+    PinName pin;
+    uint8_t channel;
+};
+
+struct serial_s {
+    PinName pin_tx;
+    PinName pin_rx;
+    uint8_t module;
+#if DEVICE_SERIAL_ASYNCH
+    uint32_t events;
+#endif
+};
+
+struct spi_s {
+    PinName pin_miso;
+    PinName pin_mosi;
+    PinName pin_sclk;
+    PinName pin_ssel;
+    uint32_t event;
+    uint8_t module;
+    uint8_t transfer_type;
+};
+
+struct i2c_s {
+    I2CName  i2c;
+    uint32_t slave;
+};
+
+struct pwmout_s {
+    PWMName pwm;
+    PinName pin;
+    uint32_t period;
+    uint32_t pulse;
+    uint8_t channel;
+    uint8_t inverted;
+};
+
+struct sleep_s {
+    TIM_HandleTypeDef TimMasterHandle;
+};
+
+#include "gpio_object.h"
+
+#ifdef __cplusplus
 }
+#endif
 
-void gpio_init(gpio_t *obj, PinName pin) {
-    obj->pin = pin;
-    if (pin == (PinName)NC) {
-        return;
-    }
-
-    uint32_t port_index = STM_PORT(pin);
-
-    // Enable GPIO clock
-    uint32_t gpio_add = Set_GPIO_Clock(port_index);
-    GPIO_TypeDef *gpio = (GPIO_TypeDef *)gpio_add;
-
-    // Fill GPIO object structure for future use
-    obj->mask    = gpio_set(pin);
-    obj->reg_in  = &gpio->IDR;
-    obj->reg_set = &gpio->BSRR;
-    obj->reg_clr = &gpio->BRR;
-}
-
-void gpio_mode(gpio_t *obj, PinMode mode) {
-    pin_mode(obj->pin, mode);
-}
-
-void gpio_dir(gpio_t *obj, PinDirection direction) {
-    MBED_ASSERT(obj->pin != (PinName)NC);
-    if (direction == PIN_OUTPUT) {
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
-    } else { // PIN_INPUT
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
-    }
-}
+#endif

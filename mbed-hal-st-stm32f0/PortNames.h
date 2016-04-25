@@ -1,6 +1,6 @@
 /* mbed Microcontroller Library
  *******************************************************************************
- * Copyright (c) 2015, STMicroelectronics
+ * Copyright (c) 2014, STMicroelectronics
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,49 +27,22 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *******************************************************************************
  */
-#include "mbed-drivers/mbed_assert.h"
-#include "gpio_api.h"
-#include "pinmap.h"
-#include "mbed-drivers/mbed_error.h"
+#ifndef MBED_PORTNAMES_H
+#define MBED_PORTNAMES_H
 
-extern uint32_t Set_GPIO_Clock(uint32_t port_idx);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-uint32_t gpio_set(PinName pin) {
-    MBED_ASSERT(pin != (PinName)NC);
+typedef enum {
+    PortA = 0,
+    PortB = 1,
+    PortC = 2,
+    PortD = 3,
+    PortF = 5
+} PortName;
 
-    pin_function(pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
-
-    return (uint32_t)(1 << ((uint32_t)pin & 0xF)); // Return the pin mask
+#ifdef __cplusplus
 }
-
-void gpio_init(gpio_t *obj, PinName pin) {
-    obj->pin = pin;
-    if (pin == (PinName)NC) {
-        return;
-    }
-
-    uint32_t port_index = STM_PORT(pin);
-
-    // Enable GPIO clock
-    uint32_t gpio_add = Set_GPIO_Clock(port_index);
-    GPIO_TypeDef *gpio = (GPIO_TypeDef *)gpio_add;
-
-    // Fill GPIO object structure for future use
-    obj->mask    = gpio_set(pin);
-    obj->reg_in  = &gpio->IDR;
-    obj->reg_set = &gpio->BSRR;
-    obj->reg_clr = &gpio->BRR;
-}
-
-void gpio_mode(gpio_t *obj, PinMode mode) {
-    pin_mode(obj->pin, mode);
-}
-
-void gpio_dir(gpio_t *obj, PinDirection direction) {
-    MBED_ASSERT(obj->pin != (PinName)NC);
-    if (direction == PIN_OUTPUT) {
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
-    } else { // PIN_INPUT
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
-    }
-}
+#endif
+#endif

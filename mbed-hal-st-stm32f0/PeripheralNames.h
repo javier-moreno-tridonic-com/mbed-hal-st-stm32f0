@@ -1,6 +1,6 @@
 /* mbed Microcontroller Library
  *******************************************************************************
- * Copyright (c) 2015, STMicroelectronics
+ * Copyright (c) 2014, STMicroelectronics
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,49 +27,70 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *******************************************************************************
  */
-#include "mbed-drivers/mbed_assert.h"
-#include "gpio_api.h"
-#include "pinmap.h"
-#include "mbed-drivers/mbed_error.h"
+#ifndef MBED_PERIPHERALNAMES_H
+#define MBED_PERIPHERALNAMES_H
 
-extern uint32_t Set_GPIO_Clock(uint32_t port_idx);
+#include "cmsis.h"
 
-uint32_t gpio_set(PinName pin) {
-    MBED_ASSERT(pin != (PinName)NC);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-    pin_function(pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
+typedef enum {
+    ADC_1 = (int)ADC1_BASE
+} ADCName;
 
-    return (uint32_t)(1 << ((uint32_t)pin & 0xF)); // Return the pin mask
+typedef enum {
+    DAC_1 = (int)DAC_BASE
+} DACName;
+
+typedef enum {
+    UART_1 = (int)USART1_BASE,
+    UART_2 = (int)USART2_BASE,
+    UART_3 = (int)USART3_BASE,
+    UART_4 = (int)USART4_BASE,
+    UART_5 = (int)USART5_BASE,
+    UART_6 = (int)USART6_BASE,
+    UART_7 = (int)USART7_BASE,
+    UART_8 = (int)USART8_BASE
+} UARTName;
+
+#ifdef YOTTA_CFG_HARDWARE_PINS_USBTX
+#define STDIO_UART_TX YOTTA_CFG_HARDWARE_PINS_USBTX
+#else
+#define STDIO_UART_TX  PA_2
+#endif
+
+#ifdef YOTTA_CFG_HARDWARE_PINS_USBRX
+#define STDIO_UART_RX YOTTA_CFG_HARDWARE_PINS_USBRX
+#else
+#define STDIO_UART_RX  PA_3
+#endif
+
+//#define STDIO_UART     UART_2
+
+typedef enum {
+    SPI_1 = (int)SPI1_BASE,
+    SPI_2 = (int)SPI2_BASE
+} SPIName;
+
+typedef enum {
+    I2C_1 = (int)I2C1_BASE,
+    I2C_2 = (int)I2C2_BASE
+} I2CName;
+
+typedef enum {
+    PWM_1  = (int)TIM1_BASE,
+    PWM_2  = (int)TIM2_BASE,
+    PWM_3  = (int)TIM3_BASE,
+    PWM_14 = (int)TIM14_BASE,
+    PWM_15 = (int)TIM15_BASE,
+    PWM_16 = (int)TIM16_BASE,
+    PWM_17 = (int)TIM17_BASE
+} PWMName;
+
+#ifdef __cplusplus
 }
+#endif
 
-void gpio_init(gpio_t *obj, PinName pin) {
-    obj->pin = pin;
-    if (pin == (PinName)NC) {
-        return;
-    }
-
-    uint32_t port_index = STM_PORT(pin);
-
-    // Enable GPIO clock
-    uint32_t gpio_add = Set_GPIO_Clock(port_index);
-    GPIO_TypeDef *gpio = (GPIO_TypeDef *)gpio_add;
-
-    // Fill GPIO object structure for future use
-    obj->mask    = gpio_set(pin);
-    obj->reg_in  = &gpio->IDR;
-    obj->reg_set = &gpio->BSRR;
-    obj->reg_clr = &gpio->BRR;
-}
-
-void gpio_mode(gpio_t *obj, PinMode mode) {
-    pin_mode(obj->pin, mode);
-}
-
-void gpio_dir(gpio_t *obj, PinDirection direction) {
-    MBED_ASSERT(obj->pin != (PinName)NC);
-    if (direction == PIN_OUTPUT) {
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
-    } else { // PIN_INPUT
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
-    }
-}
+#endif

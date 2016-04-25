@@ -32,18 +32,18 @@
 #include "cmsis.h"
 #include "gpio_irq_api.h"
 #include "pinmap.h"
-#include "mbed_error.h"
+#include "mbed-drivers/mbed_error.h"
 
 #define EDGE_NONE (0)
 #define EDGE_RISE (1)
 #define EDGE_FALL (2)
 #define EDGE_BOTH (3)
 
-// Number of EXTI irq vectors (EXTI0, EXTI1, EXTI2, EXTI3, EXTI4, EXTI5_9, EXTI10_15)
-#define CHANNEL_NUM (7)
+// Number of EXTI irq vectors (EXTI0_1, EXTI2_3, EXTI4_15)
+#define CHANNEL_NUM (3)
 
-// Max pins for one line (max with EXTI10_15)
-#define MAX_PIN_LINE (6)
+// Max pins for one line (max with EXTI4_15)
+#define MAX_PIN_LINE (12)
 
 typedef struct gpio_channel {
     uint32_t pin_mask;                   // bitmask representing which pins are configured for receiving interrupts
@@ -55,44 +55,35 @@ typedef struct gpio_channel {
 static gpio_channel_t channels[CHANNEL_NUM] = {
     {.pin_mask = 0},
     {.pin_mask = 0},
-    {.pin_mask = 0},
-    {.pin_mask = 0},
-    {.pin_mask = 0},
-    {.pin_mask = 0},
     {.pin_mask = 0}
 };
 
 // Used to return the index for channels array.
 static uint32_t pin_base_nr[16] = {
-    // EXTI0
+    // EXTI0_1
     0, // pin 0
-    // EXTI1
-    0, // pin 1
-    // EXTI2
+    1, // pin 1
+    // EXTI2_3
     0, // pin 2
-    // EXTI3
-    0, // pin 3
-    // EXTI4
+    1, // pin 3
+    // EXTI4_15
     0, // pin 4
-    // EXTI5_9
-    0, // pin 5
-    1, // pin 6
-    2, // pin 7
-    3, // pin 8
-    4, // pin 9
-    // EXTI10_15
-    0, // pin 10
-    1, // pin 11
-    2, // pin 12
-    3, // pin 13
-    4, // pin 14
-    5  // pin 15
+    1, // pin 5
+    2, // pin 6
+    3, // pin 7
+    4, // pin 8
+    5, // pin 9
+    6, // pin 10
+    7, // pin 11
+    8, // pin 12
+    9, // pin 13
+   10, // pin 14
+   11  // pin 15
 };
 
 static gpio_irq_handler irq_handler;
 
-static void handle_interrupt_in(uint32_t irq_index, uint32_t max_num_pin_line)
-{
+static void handle_interrupt_in(uint32_t irq_index, uint32_t max_num_pin_line) {
     gpio_channel_t *gpio_channel = &channels[irq_index];
     uint32_t gpio_idx;
 
@@ -121,52 +112,24 @@ static void handle_interrupt_in(uint32_t irq_index, uint32_t max_num_pin_line)
     }
 }
 
-// EXTI line 0
-static void gpio_irq0(void)
-{
-    handle_interrupt_in(0, 1);
+// EXTI lines 0 to 1
+static void gpio_irq0(void) {
+    handle_interrupt_in(0, 2);
 }
 
-// EXTI line 1
-static void gpio_irq1(void)
-{
-    handle_interrupt_in(1, 1);
+// EXTI lines 2 to 3
+static void gpio_irq1(void) {
+    handle_interrupt_in(1, 2);
 }
 
-// EXTI line 2
-static void gpio_irq2(void)
-{
-    handle_interrupt_in(2, 1);
-}
-
-// EXTI line 3
-static void gpio_irq3(void)
-{
-    handle_interrupt_in(3, 1);
-}
-
-// EXTI line 4
-static void gpio_irq4(void)
-{
-    handle_interrupt_in(4, 1);
-}
-
-// EXTI lines 5 to 9
-static void gpio_irq5(void)
-{
-    handle_interrupt_in(5, 5);
-}
-
-// EXTI lines 10 to 15
-static void gpio_irq6(void)
-{
-    handle_interrupt_in(6, 6);
+// EXTI lines 4 to 15
+static void gpio_irq2(void) {
+    handle_interrupt_in(2, 12);
 }
 
 extern uint32_t Set_GPIO_Clock(uint32_t port_idx);
 
-int gpio_irq_init(gpio_irq_t *obj, PinName pin, gpio_irq_handler handler, uint32_t id)
-{
+int gpio_irq_init(gpio_irq_t *obj, PinName pin, gpio_irq_handler handler, uint32_t id) {
     IRQn_Type irq_n = (IRQn_Type)0;
     uint32_t vector = 0;
     uint32_t irq_index;
@@ -179,55 +142,21 @@ int gpio_irq_init(gpio_irq_t *obj, PinName pin, gpio_irq_handler handler, uint32
     uint32_t pin_index  = STM_PIN(pin);
 
     // Select irq number and interrupt routine
-#warning "jagomo: EXTI$_IRQn -> EXTI$_$_IRQn"
-    switch (pin_index) {
-        case 0:
-            irq_n = EXTI0_1_IRQn;
-            vector = (uint32_t)&gpio_irq0;
-            irq_index = 0;
-            break;
-        case 1:
-            irq_n = EXTI0_1_IRQn;
-            vector = (uint32_t)&gpio_irq1;
-            irq_index = 1;
-            break;
-        case 2:
-            irq_n = EXTI2_3_IRQn;
-            vector = (uint32_t)&gpio_irq2;
-            irq_index = 2;
-            break;
-        case 3:
-            irq_n = EXTI2_3_IRQn;
-            vector = (uint32_t)&gpio_irq3;
-            irq_index = 3;
-            break;
-        case 4:
-            irq_n = EXTI4_15_IRQn;
-            vector = (uint32_t)&gpio_irq4;
-            irq_index = 4;
-            break;
-        case 5:
-        case 6:
-        case 7:
-        case 8:
-        case 9:
-            irq_n = EXTI4_15_IRQn;
-            vector = (uint32_t)&gpio_irq5;
-            irq_index = 5;
-            break;
-        case 10:
-        case 11:
-        case 12:
-        case 13:
-        case 14:
-        case 15:
-            irq_n = EXTI4_15_IRQn;
-            vector = (uint32_t)&gpio_irq6;
-            irq_index = 6;
-            break;
-        default:
-            error("InterruptIn error: pin not supported.\n");
-            return -1;
+    if ((pin_index == 0) || (pin_index == 1)) {
+        irq_n = EXTI0_1_IRQn;
+        vector = (uint32_t)&gpio_irq0;
+        irq_index = 0;
+    } else if ((pin_index == 2) || (pin_index == 3)) {
+        irq_n = EXTI2_3_IRQn;
+        vector = (uint32_t)&gpio_irq1;
+        irq_index = 1;
+    } else if ((pin_index > 3) && (pin_index < 16)) {
+        irq_n = EXTI4_15_IRQn;
+        vector = (uint32_t)&gpio_irq2;
+        irq_index = 2;
+    } else {
+        error("InterruptIn error: pin not supported.\n");
+        return -1;
     }
 
     // Enable GPIO clock
@@ -258,8 +187,7 @@ int gpio_irq_init(gpio_irq_t *obj, PinName pin, gpio_irq_handler handler, uint32
     return 0;
 }
 
-void gpio_irq_free(gpio_irq_t *obj)
-{
+void gpio_irq_free(gpio_irq_t *obj) {
     gpio_channel_t *gpio_channel = &channels[obj->irq_index];
     uint32_t pin_index  = STM_PIN(obj->pin);
     uint32_t gpio_idx = pin_base_nr[pin_index];
@@ -274,8 +202,7 @@ void gpio_irq_free(gpio_irq_t *obj)
     obj->event = EDGE_NONE;
 }
 
-void gpio_irq_set(gpio_irq_t *obj, gpio_irq_event event, uint32_t enable)
-{
+void gpio_irq_set(gpio_irq_t *obj, gpio_irq_event event, uint32_t enable) {
     uint32_t mode = STM_MODE_IT_EVT_RESET;
     uint32_t pull = GPIO_NOPULL;
 
@@ -322,13 +249,11 @@ void gpio_irq_set(gpio_irq_t *obj, gpio_irq_event event, uint32_t enable)
     pin_function(obj->pin, STM_PIN_DATA(mode, pull, 0));
 }
 
-void gpio_irq_enable(gpio_irq_t *obj)
-{
+void gpio_irq_enable(gpio_irq_t *obj) {
     vIRQ_EnableIRQ(obj->irq_n);
 }
 
-void gpio_irq_disable(gpio_irq_t *obj)
-{
+void gpio_irq_disable(gpio_irq_t *obj) {
     vIRQ_DisableIRQ(obj->irq_n);
     obj->event = EDGE_NONE;
 }

@@ -1,6 +1,6 @@
 /* mbed Microcontroller Library
  *******************************************************************************
- * Copyright (c) 2015, STMicroelectronics
+ * Copyright (c) 2014, STMicroelectronics
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -27,49 +27,64 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *******************************************************************************
  */
-#include "mbed-drivers/mbed_assert.h"
-#include "gpio_api.h"
-#include "pinmap.h"
-#include "mbed-drivers/mbed_error.h"
 
-extern uint32_t Set_GPIO_Clock(uint32_t port_idx);
+    PA_0  = 0x00,
+    PA_1  = 0x01,
+    PA_2  = 0x02,
+    PA_3  = 0x03,
+    PA_4  = 0x04,
+    PA_5  = 0x05,
+    PA_6  = 0x06,
+    PA_7  = 0x07,
+    PA_8  = 0x08,
+    PA_9  = 0x09,
+    PA_10 = 0x0A,
+    PA_11 = 0x0B,
+    PA_12 = 0x0C,
+    PA_13 = 0x0D,
+    PA_14 = 0x0E,
+    PA_15 = 0x0F,
 
-uint32_t gpio_set(PinName pin) {
-    MBED_ASSERT(pin != (PinName)NC);
+    PB_0  = 0x10,
+    PB_1  = 0x11,
+    PB_2  = 0x12,
+    PB_3  = 0x13,
+    PB_4  = 0x14,
+    PB_5  = 0x15,
+    PB_6  = 0x16,
+    PB_7  = 0x17,
+    PB_8  = 0x18,
+    PB_9  = 0x19,
+    PB_10 = 0x1A,
+    PB_11 = 0x1B,
+    PB_12 = 0x1C,
+    PB_13 = 0x1D,
+    PB_14 = 0x1E,
+    PB_15 = 0x1F,
 
-    pin_function(pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
+    PC_0  = 0x20,
+    PC_1  = 0x21,
+    PC_2  = 0x22,
+    PC_3  = 0x23,
+    PC_4  = 0x24,
+    PC_5  = 0x25,
+    PC_6  = 0x26,
+    PC_7  = 0x27,
+    PC_8  = 0x28,
+    PC_9  = 0x29,
+    PC_10 = 0x2A,
+    PC_11 = 0x2B,
+    PC_12 = 0x2C,
+    PC_13 = 0x2D,
+    PC_14 = 0x2E,
+    PC_15 = 0x2F,
 
-    return (uint32_t)(1 << ((uint32_t)pin & 0xF)); // Return the pin mask
-}
+    PD_2  = 0x32,
 
-void gpio_init(gpio_t *obj, PinName pin) {
-    obj->pin = pin;
-    if (pin == (PinName)NC) {
-        return;
-    }
+    PF_0  = 0x50,
+    PF_1  = 0x51,
+    PF_11 = 0x5B,
 
-    uint32_t port_index = STM_PORT(pin);
-
-    // Enable GPIO clock
-    uint32_t gpio_add = Set_GPIO_Clock(port_index);
-    GPIO_TypeDef *gpio = (GPIO_TypeDef *)gpio_add;
-
-    // Fill GPIO object structure for future use
-    obj->mask    = gpio_set(pin);
-    obj->reg_in  = &gpio->IDR;
-    obj->reg_set = &gpio->BSRR;
-    obj->reg_clr = &gpio->BRR;
-}
-
-void gpio_mode(gpio_t *obj, PinMode mode) {
-    pin_mode(obj->pin, mode);
-}
-
-void gpio_dir(gpio_t *obj, PinDirection direction) {
-    MBED_ASSERT(obj->pin != (PinName)NC);
-    if (direction == PIN_OUTPUT) {
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_OUTPUT_PP, GPIO_NOPULL, 0));
-    } else { // PIN_INPUT
-        pin_function(obj->pin, STM_PIN_DATA(STM_MODE_INPUT, GPIO_NOPULL, 0));
-    }
-}
+    ADC_TEMP = 0xF0,
+    ADC_VREF = 0xF1,
+    ADC_VBAT = 0xF2,
