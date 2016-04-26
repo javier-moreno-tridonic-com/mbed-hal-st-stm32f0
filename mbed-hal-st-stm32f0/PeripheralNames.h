@@ -55,17 +55,17 @@ typedef enum {
     UART_8 = (int)USART8_BASE
 } UARTName;
 
-#ifdef YOTTA_CFG_HARDWARE_PINS_USBTX
-#define STDIO_UART_TX YOTTA_CFG_HARDWARE_PINS_USBTX
-#else
-#define STDIO_UART_TX  PA_2
-#endif
-
-#ifdef YOTTA_CFG_HARDWARE_PINS_USBRX
-#define STDIO_UART_RX YOTTA_CFG_HARDWARE_PINS_USBRX
-#else
-#define STDIO_UART_RX  PA_3
-#endif
+//#ifdef YOTTA_CFG_HARDWARE_PINS_USBTX
+//#define STDIO_UART_TX YOTTA_CFG_HARDWARE_PINS_USBTX
+//#else
+//#define STDIO_UART_TX  PA_2
+//#endif
+//
+//#ifdef YOTTA_CFG_HARDWARE_PINS_USBRX
+//#define STDIO_UART_RX YOTTA_CFG_HARDWARE_PINS_USBRX
+//#else
+//#define STDIO_UART_RX  PA_3
+//#endif
 
 //#define STDIO_UART     UART_2
 

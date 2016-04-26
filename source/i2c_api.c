@@ -1757,7 +1757,7 @@ int i2c_enable_i2c_it(i2c_t *obj)
 	              process unlock */
 
 	    /* Enable EVT, BUF and ERR interrupt | I2C_IT_BUF */
-	    __HAL_I2C_ENABLE_IT(&t_I2cHandle[i2c_module_lookup(obj)],
+	    __HAL_I2C_ENABLE_IT(&t_I2cHandle[i2c_module_lookup(obj)], I2C_IT_ADDRI | I2C_IT_ERRI | I2C_IT_STOPI);
 
 	    return HAL_OK;
 	}
