@@ -177,6 +177,11 @@ void i2c_init(i2c_t *obj, PinName sda, PinName scl)
     i2c_frequency(obj, 100000); // 100 kHz per default
 }
 
+void i2c_deInit(i2c_t *obj)
+{
+    HAL_I2C_DeInit(&t_I2cHandle[i2c_module_lookup(obj)]);
+}
+ 
 void i2c_frequency(i2c_t *obj, int hz) {
     MBED_ASSERT((hz == 100000) || (hz == 400000) || (hz == 1000000));
 #if !DEVICE_I2C_ASYNCH	
