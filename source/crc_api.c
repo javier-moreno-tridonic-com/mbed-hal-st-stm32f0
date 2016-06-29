@@ -9,6 +9,13 @@
 
 static uint32_t l_CRC;
 
+/* CRC handler declaration */
+CRC_HandleTypeDef   CrcHandle;
+
+int Init()
+{
+
+}
 
 int Reset()
 {
