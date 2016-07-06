@@ -49,7 +49,7 @@ int Init()
 int Reset()
 {
     /* Reset CRC Calculation Unit */
-    /// TODO: CHECK THIS!!! /// __HAL_CRC_DR_RESET(&CRC_HandleStruct);
+    // TODO: CHECK THIS!!! //     __HAL_CRC_DR_RESET(&CRC_HandleStruct);
     // Needed to clear the CRC and start a new crc calculation
 
     HAL_CRC_DeInit(&CRC_HandleStruct);
@@ -64,21 +64,28 @@ int CalcSingle(uint8_t* ui8StartAddress, uint32_t ui32DataSize, uint32_t* pui32C
 
 int CalcAccumulate(uint8_t* pui8StartAddress, uint32_t ui32DataSize, uint32_t* pui32CRC)
 {
+    //printf("CalcAccumulate: %x, ui32DataSize: %d \n", pui8StartAddress, ui32DataSize);
     uint32_t uwCRCValue;
-    uint32_t *pui32StartAddress = (uint32_t*)pui8StartAddress;
+    //uint32_t *pui32StartAddress = (uint32_t*)pui8StartAddress;
     uint32_t ui32DataSize32Bits = ui32DataSize / 4;
     uint32_t ui32TemporaryDataStorage;
-    uint8_t* pui8TemporaryArray;
-    uint8_t ui8TempByte;
+    /*uint8_t* pui8TemporaryArray;
+    uint8_t ui8TempByte;*/
 
     // Reverse input bits
     for (uint32_t i = 0; i < ui32DataSize32Bits; i++)
     {
-        printf("StartAddress: %x, i: %d \n", pui32StartAddress, i);
-        ui32TemporaryDataStorage = pui32StartAddress[i];
+        //printf("StartAddress: %x, i: %d \n", pui32StartAddress, i);
+        ui32TemporaryDataStorage =
+                (pui8StartAddress[i*4+0] << 24) +
+                (pui8StartAddress[i*4+1] << 16) +
+                (pui8StartAddress[i*4+2] <<  8) +
+                (pui8StartAddress[i*4+3] <<  0);
+
+                //pui32StartAddress[i];
         //ui32TemporaryDataStorage = __RBIT(ui32TemporaryDataStorage);
 
-        ui32TemporaryDataStorage = __bswap_32(ui32TemporaryDataStorage);
+        //ui32TemporaryDataStorage = __bswap_32(ui32TemporaryDataStorage);
         //ui32TemporaryDataStorage = __REV(ui32TemporaryDataStorage);   // DECOMMENTED BECAUSE IT IS NOT NEEDED. DISCUSS WITHN mab TODO!!!
         /*
         pui8TemporaryArray = (uint8_t*) &ui32TemporaryDataStorage;
