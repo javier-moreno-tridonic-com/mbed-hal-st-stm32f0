@@ -1698,6 +1698,25 @@ uint32_t i2cslave_irq_handler_asynch(i2c_t *obj)
 
 
 #ifdef DEVICE_I2C_DMA
+
+/* Mechanism to enable own address acknowledge */
+void i2c_ack_own_address(i2c_t *obj)
+{
+    t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c);
+
+    /* Enable Address Acknowledge */
+    t_I2cHandle[i2c_module_lookup(obj)].Instance->CR2 &= ~I2C_CR2_NACK;
+}
+
+/* Mechanism to disable own address acknowledge */
+void i2c_nack_own_address(i2c_t *obj)
+{
+    t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c);
+
+    /* Disable Address Acknowledge */
+    t_I2cHandle[i2c_module_lookup(obj)].Instance->CR2 |= I2C_CR2_NACK;
+}
+
 void i2c_set_own_address(i2c_t *obj, uint32_t address)
 {
     t_I2cHandle[i2c_module_lookup(obj)].Instance = (I2C_TypeDef *)(obj->i2c);
