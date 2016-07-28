@@ -174,7 +174,7 @@ void i2c_init(i2c_t *obj, PinName sda, PinName scl)
     i2c_reset(obj);
 
     // I2C configuration
-    i2c_frequency(obj, 100000); // 100 kHz per default
+    i2c_frequency(obj, 400000); // 100 kHz per default
 }
 
 void i2c_deInit(i2c_t *obj)
