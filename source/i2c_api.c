@@ -174,7 +174,7 @@ void i2c_init(i2c_t *obj, PinName sda, PinName scl)
     i2c_reset(obj);
 
     // I2C configuration
-    i2c_frequency(obj, 100000); // 100 kHz per default
+    i2c_frequency(obj, 400000); // 100 kHz per default
 }
 
 void i2c_deInit(i2c_t *obj)
@@ -1869,21 +1869,12 @@ void HAL_I2C_MspDeInit(I2C_HandleTypeDef* hi2c)
 {
 	if(hi2c->Instance == I2C1)
 	{
-		/* Peripheral clock disable */
-		__I2C1_CLK_DISABLE();
-
-		/* Peripheral interrupt DeInit*/
-		HAL_NVIC_DisableIRQ(I2C1_IRQn);
-
-		/**I2C1 GPIO Configuration
-		PB6     ------> I2C1_SCL
-		PB7     ------> I2C1_SDA
-		*/
-		HAL_GPIO_DeInit(GPIOB, GPIO_PIN_6|GPIO_PIN_7);
+		hi2c->hdmarx->State = HAL_DMA_STATE_RESET;
+		hi2c->hdmatx->State = HAL_DMA_STATE_RESET;
 
 		/* Peripheral DMA DeInit*/
-    	HAL_DMA_DeInit(hi2c->hdmarx);
-    	HAL_DMA_DeInit(hi2c->hdmatx);
+		HAL_DMA_DeInit(hi2c->hdmarx);
+		HAL_DMA_DeInit(hi2c->hdmatx);
 	}
 }
 
