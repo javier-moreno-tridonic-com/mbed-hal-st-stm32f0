@@ -120,19 +120,25 @@ int EraseSectorByAddress(uint32_t ui32Address)
     return EraseSectorByNumber(ui32SectorNumber);
 }
 
-int GetNumOfSectors(void)
+int GetNumOfSectors(uint32_t* pui32NumOfVectors)
 {
-    return NUMBER_OF_FLASH_SECTORS;
+    *pui32NumOfVectors = NUMBER_OF_FLASH_SECTORS;
+
+    return 0;
 }
 
-void GetSectorStartAdd(uint32_t ui32Sector, uint32_t* pui32Address)
+int GetSectorStartAdd(uint32_t ui32Sector, uint32_t* pui32Address)
 {
     *pui32Address = (ui32Sector * SECTOR_SIZE) + FLASH_SECTOR_0_START_ADDRESS;
+	
+	return 0;
 }
 
-void GetSectorEndAdd(uint32_t ui32Sector, uint32_t* pui32Address)
+int GetSectorEndAdd(uint32_t ui32Sector, uint32_t* pui32Address)
 {
     *pui32Address = (ui32Sector * SECTOR_SIZE) + (SECTOR_SIZE - 1) + FLASH_SECTOR_0_START_ADDRESS;
+	
+	return 0;
 }
 
 
